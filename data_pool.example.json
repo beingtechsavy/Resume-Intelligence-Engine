@@ -1,0 +1,158 @@
+{
+    "personal_info": {
+        "name": "Your Full Name",
+        "location": "City, Country",
+        "email": "your.email@example.com",
+        "linkedin": "linkedin.com/in/yourprofile",
+        "github": "github.com/yourusername"
+    },
+    "positioning": {
+        "core_identity": "One-line description of who you are professionally",
+        "current_level": "e.g. Early-career engineer with 2 years of project experience",
+        "target_roles": [
+            "Software Engineer",
+            "Backend Engineer",
+            "Data Engineer"
+        ],
+        "long_term_goal": "Where you want to be in 5-10 years",
+        "strengths": [
+            "Strength 1 — be specific, not generic",
+            "Strength 2 — quantify where possible",
+            "Strength 3",
+            "Strength 4",
+            "Strength 5"
+        ]
+    },
+    "education": {
+        "degree": "B.Tech / B.Sc / M.Sc Computer Science",
+        "university": "Your University Name",
+        "year": "2021–2025",
+        "cgpa": "X.X/10 or X.X/4.0",
+        "relevant_coursework": [
+            "Data Structures & Algorithms",
+            "Database Systems",
+            "Machine Learning",
+            "Computer Networks"
+        ]
+    },
+    "skills": {
+        "languages": [
+            "Python",
+            "JavaScript",
+            "Java"
+        ],
+        "data": [
+            "SQL",
+            "Pandas",
+            "Data Analysis"
+        ],
+        "ml": [
+            "Scikit-learn",
+            "TensorFlow"
+        ],
+        "tools": [
+            "Git",
+            "Docker",
+            "AWS"
+        ],
+        "frameworks": [
+            "React",
+            "Flask",
+            "FastAPI"
+        ],
+        "domains": [
+            "Web Development",
+            "Cloud Computing"
+        ]
+    },
+    "projects": [
+        {
+            "name": "Project Name",
+            "type": "SaaS / Research / Open Source / etc.",
+            "description": "One-sentence description of what it does",
+            "tech_stack": [
+                "React",
+                "Node.js",
+                "PostgreSQL"
+            ],
+            "data_work": [
+                "Key technical contribution 1",
+                "Key technical contribution 2"
+            ],
+            "impact": [
+                "Measurable outcome (e.g. 500+ users, 40% reduction in load time)",
+                "What you learned or proved"
+            ],
+            "business_relevance": "Why this project matters beyond the code",
+            "tags": [
+                "web",
+                "backend",
+                "data"
+            ]
+        },
+        {
+            "name": "Another Project",
+            "type": "Mobile App",
+            "description": "What problem this solves",
+            "tech_stack": [
+                "Kotlin",
+                "Firebase"
+            ],
+            "data_work": [
+                "Technical contribution"
+            ],
+            "impact": [
+                "Result or insight"
+            ],
+            "business_relevance": "Relevance to the role you're applying for",
+            "tags": [
+                "mobile",
+                "android"
+            ]
+        }
+    ],
+    "experience": [
+        {
+            "role": "Software Engineering Intern",
+            "organization": "Company / Institution Name",
+            "duration": "Jun 2024 – Aug 2024",
+            "data_focus": [
+                "What you worked on technically",
+                "Any data/analysis work"
+            ],
+            "impact": [
+                "Outcome 1",
+                "Outcome 2"
+            ]
+        },
+        {
+            "role": "Campus Ambassador / Leadership Role",
+            "type": "Leadership",
+            "impact": [
+                "Led workshops for X students",
+                "Organized Y events"
+            ],
+            "relevance": "Why this is relevant to your target role"
+        }
+    ],
+    "certifications": [
+        "Course Name – Institution (topics covered)",
+        "Another Certification – Platform"
+    ],
+    "achievements": [
+        "Achievement 1 with specific numbers or recognition",
+        "Achievement 2 — the more concrete, the better"
+    ],
+    "languages": {
+        "english": "C1 / B2 / Native",
+        "german": "A1 / B1 (if applicable)",
+        "other": "Native"
+    },
+    "signals": {
+        "product_thinking": true,
+        "data_exposure": true,
+        "systems_thinking": false,
+        "leadership": true,
+        "fintech_interest": false
+    }
+}

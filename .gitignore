@@ -1,0 +1,52 @@
+# ─────────────────────────────────────────────────
+#  Resume Intelligence Engine — .gitignore
+#  Everything below stays LOCAL. Never push these.
+# ─────────────────────────────────────────────────
+
+# ── API Keys & Secrets ──────────────────────────
+.env
+
+# ── Your Personal Data ──────────────────────────
+# These contain real personal information (name, email,
+# projects, motivations). Replace with your own data.
+data_pool.json
+motivation_data.json
+
+# ── Generated Outputs & Personal Docs ──────────
+# Auto-generated from your personal data — not needed
+output.tex
+outputs/
+Resumes/
+docs/
+
+# ── Application-Specific PDFs ───────────────────
+# Any actual university/job application documents
+Cover Letter Maker/*.pdf
+Cover Letter Maker/.env
+Cover Letter Maker/motivation_data.json
+
+# ── Python Cache ─────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Editor / OS ──────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── LaTeX Intermediates ──────────────────────────
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz

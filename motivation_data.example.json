@@ -1,0 +1,54 @@
+{
+    "identity": {
+        "self_description": "Describe who you are in your own words — not a student definition, but your actual identity. What do you build? What do you care about? What makes you different from others in your field?",
+        "core_thesis": "The single idea that connects everything you've done. What is the through-line of your career so far?",
+        "career_direction": "Where are you heading and why? Be specific about the intersection of industries, roles, and skills you're targeting."
+    },
+
+    "origin_stories": {
+        "project_1_real_lesson": "What did your most important project really teach you — not the tech, but the thinking? What gap did you discover? What changed in how you see the world?",
+        "project_2_pull": "What drew you to a particular domain (fintech, healthcare, etc.)? What specific moment or insight made it real for you?",
+        "experience_1_shift": "How did a specific experience (internship, role, event) fundamentally change how you think or work?",
+        "experience_2_lesson": "A lesson from a challenge, failure, or unexpected insight — something that shaped your professional values."
+    },
+
+    "seed_sentences": {
+        "key_sentence_1": "A single sentence that captures your professional identity. Should be able to open any cover letter.",
+        "key_sentence_2": "A sentence about your most important insight or achievement — grounded in a real number or outcome.",
+        "key_sentence_3": "A sentence about how a key experience changed your thinking.",
+        "key_sentence_4": "A sentence about what you've learned about the role of compliance, scale, or systems in your work.",
+        "key_sentence_5": "A sentence about your communication or leadership ability — grounded in a real example."
+    },
+
+    "values": [
+        "Value 1 — what you believe about how good work gets done",
+        "Value 2 — what you think most people get wrong in your field",
+        "Value 3 — a principle that guides your technical decisions",
+        "Value 4 — something you believe about users or the people your work affects",
+        "Value 5 — your relationship with learning, growth, or ambition"
+    ],
+
+    "what_you_are_not": [
+        "Clarify a misconception or stereotype that doesn't apply to you",
+        "A boundary or limit on your career direction — what you're not pursuing and why",
+        "A metric or surface-level achievement that doesn't capture what actually matters to you"
+    ],
+
+    "role_adaptation": {
+        "for_tech_roles": "Which projects and skills to lead with. What to emphasize about how you think technically.",
+        "for_product_roles": "Which stories show product thinking. What outcome-focused framing to use.",
+        "for_data_roles": "Where you've done real data work. What analytical skills or decisions to highlight.",
+        "for_customer_facing_roles": "Where you've communicated complex ideas to non-technical people. What empathy or UX thinking to show.",
+        "for_domain_specific_roles": "e.g. For fintech: what financial systems experience or interest do you have?",
+        "for_support_roles": "Where you've helped users or communities. What debugging or people skills to show."
+    },
+
+    "tone": {
+        "style": "Describe your writing voice — are you direct? storytelling? analytical? formal but honest?",
+        "contractions": true,
+        "formality": "e.g. professional but personal — confident without boasting, honest about failures",
+        "avoid": "What clichés or generic phrases should the AI never use when writing about you?"
+    },
+
+    "personal_story": "Write 2-4 sentences that you consider the most honest and compelling summary of why you do what you do. This is the raw material for the opening paragraph of any cover letter. Don't perform — just tell the real story."
+}
