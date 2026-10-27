@@ -1,6 +1,6 @@
 # Resume Intelligence Engine
 
-> A personal AI system that reads a job description and generates a tailored, ATS-optimized resume — as a PDF — in under 60 seconds.
+> A personal AI system that reads a job description and generates a tailored, evidence-backed resume — as editable LaTeX and optionally a PDF.
 
 No generic templates. No manual rewriting. Just structured personal data + a language model doing the heavy lifting.
 
@@ -26,6 +26,8 @@ The cover letter variant (`cl_prompt_builder.py`) adds `motivation_data.json` �
 .
 ├── resume_generator.py        # Main orchestrator — run this for resumes
 ├── generate.py                # Core generation logic
+├── ai_config.py               # Shared local OpenRouter configuration
+├── job_matcher.py             # Local explainable JD-to-evidence triage
 ├── prompt_builder.py          # PCB + resume prompt construction
 ├── cl_prompt_builder.py       # PCB + cover letter prompt construction
 ├── Cover Letter Maker/
@@ -59,7 +61,7 @@ copy .env.example .env
 cp .env.example .env
 ```
 
-Open `.env` and paste your [DeepSeek API key](https://platform.deepseek.com).
+Open `.env` and paste your [OpenRouter API key](https://openrouter.ai/keys), then set an available OpenRouter model slug.
 
 ### 3. Fill in your profile data
 
@@ -85,6 +87,35 @@ Edit `motivation_data.json` with your personal narrative, origin stories, and to
 
 ## Run
 
+### Local job triage
+
+Analyze a saved job-description text file before making an AI generation call:
+
+```bash
+python job_matcher.py --jd-file path/to/job-description.txt --output match-report.json
+```
+
+The report identifies role-family signals, explicit skills, evidence status,
+experience gates, compensation mentions, eligibility questions, and the
+role-specific resume evidence plan. The local selector suppresses unrelated
+experience (for example, a podcast internship for a technical JD) before the
+drafting model sees the profile. It is not an ATS score and does not submit an
+application.
+
+### Local ATS-oriented validation
+
+Validate a generated LaTeX resume without uploading private profile data to a
+third-party scanner:
+
+```bash
+python ats_validator.py --resume output.tex --jd-file path/to/job-description.txt
+```
+
+The validator checks text-safe structure, standard headings, one-column layout,
+parser-hostile elements, package compatibility and overlap with the local
+matcher’s detected job skills. It is an explainable parser-safety check, not a
+universal ATS score or hiring prediction.
+
 ### Resume Generator
 
 ```bash
@@ -97,12 +128,63 @@ Paste the job description, type `END` on a new line, press Enter.
 - `output.tex` — raw LaTeX resume
 - `outputs/Company_Role.pdf` — compiled PDF (if LaTeX is installed)
 
+### Parallel application packet generation
+
+Use `generate.py` when you want the resume and cover letter generated
+concurrently from the same job description:
+
+```bash
+python generate.py
+```
+
+`resume_generator.py` remains the standalone resume-only path. Both paths use
+the shared OpenRouter model configuration. The recommended DeepSeek setup is:
+
+```env
+OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash-1017
+OPENROUTER_PROVIDER_SORT=throughput
+OPENROUTER_PROVIDER_ALLOW_FALLBACKS=true
+OPENROUTER_PROVIDER_MAX_PROMPT_PRICE=0.10
+OPENROUTER_PROVIDER_MAX_COMPLETION_PRICE=0.60
+OPENROUTER_REASONING_EFFORT=none
+```
+
+The provider policy asks OpenRouter for a high-throughput endpoint under the
+configured price ceiling and permits fallback when an endpoint is unavailable.
+The selected routing policy is printed at startup, and the combined summary
+still reports separate CV/cover-letter timing and token usage.
+
+Resume drafting is constrained to one page: at most two experience entries,
+three projects, two certifications, three skill rows, and two bullets per
+experience/project entry. Lower-scoring evidence is omitted rather than pushed
+onto a second page.
+
 ### Cover Letter Generator
 
 ```bash
 cd "Cover Letter Maker"
 python cover_letter_generator.py
 ```
+
+### Local web workbench
+
+Run the dependency-light local frontend and API from the project root:
+
+```bash
+python app.py --host 127.0.0.1 --port 8000
+```
+
+Then open `http://127.0.0.1:8000`. The workbench provides local job triage,
+minimal profile context, bounded generation jobs and links to versioned local
+run artifacts. AI generation is always user-triggered; the server does not call
+OpenRouter during startup. Completed manifests are recovered from `runs/` when
+the server restarts, while private job-description payloads are not restored.
+If all retained jobs are still active, new generation requests receive a clear
+queue-full response instead of silently evicting an active job. Completed
+resume and cover-letter LaTeX can be previewed and copied directly inside the
+workbench; downloading is optional. The raw `.tex` links are served as
+`text/plain` with an inline disposition so browsers open them as readable text
+instead of treating them as downloads.
 
 ---
 
@@ -130,17 +212,18 @@ The `motivation_data.json` is even more opinionated: it's a structure for your *
 
 ---
 
-## Model
+## Provider and model
 
-Default: `deepseek-chat` (DeepSeek-V3 / V4-Flash).  
-Update `DEEPSEEK_MODEL` in your `.env` to switch models.
+The local generators use OpenRouter's OpenAI-compatible API. This keeps the
+workflow local while allowing the selected model to be changed without changing
+the generation code. The actual model and current pricing are controlled by
+`OPENROUTER_MODEL` and the OpenRouter account/catalog, not hard-coded in this
+repository.
 
 ```env
-# Fast and cheap — good for resume generation
-DEEPSEEK_MODEL=deepseek-chat
-
-# Slower, reasoning mode — useful for complex narrative tasks
-DEEPSEEK_MODEL=deepseek-reasoner
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash-1017
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 ```
 
 ---
@@ -149,5 +232,5 @@ DEEPSEEK_MODEL=deepseek-reasoner
 
 ```
 python-dotenv
-openai        # DeepSeek uses an OpenAI-compatible API
+openai        # OpenRouter exposes an OpenAI-compatible API
 ```

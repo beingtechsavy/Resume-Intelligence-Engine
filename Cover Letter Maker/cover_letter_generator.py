@@ -7,13 +7,13 @@ Usage:
     python cover_letter_generator.py
 
 Flow:
-    1.  Load .env  ->  API key + model config
+    1.  Load .env  ->  OpenRouter API key + model config
     2.  Load data_pool.json (from ../Resume Maker/)
     3.  Load motivation_data.json (local, optional)
     4.  Collect JD / scholarship description (multiline, END to finish)
     5.  Optionally collect seed sentences (user's own words)
     6.  Build prompt via cl_prompt_builder
-    7.  Call DeepSeek API
+    7.  Call OpenRouter through the OpenAI-compatible API
     8.  Strip any accidental markdown fences
     9.  Write output.tex
     10. Extract Org + Position from the LaTeX comment header
@@ -23,16 +23,18 @@ Flow:
 
 import json
 import logging
-import os
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-from openai import OpenAI
+# The shared provider config lives at the project root while this script keeps
+# its dedicated local prompt builder and output files. Append the root so the
+# local ``cl_prompt_builder.py`` remains the import that wins.
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+from ai_config import AIConfig, load_ai_config
 from cl_prompt_builder import build_cl_prompt
 
 # Suppress the openai + httpx libraries' own progress/debug output.
@@ -58,14 +60,6 @@ POOL_FILE = BASE_DIR.parent / "data_pool.json"
 # A full cover letter: ~1,500-2,500 tokens.  4,000 gives plenty of room.
 MAX_OUTPUT_TOKENS = 4_000
 
-# DeepSeek V4 Flash pricing (2026-06).
-# Cache-miss input : $0.140 / 1M tokens   (~3x cheaper than V4 Pro)
-# Cache-hit input  : $0.0028 / 1M tokens  (prefix caching on repeated runs)
-# Output           : $0.280 / 1M tokens   (~3x cheaper than V4 Pro)
-_PRICE_INPUT_CACHE_MISS_PER_M = 0.140
-_PRICE_INPUT_CACHE_HIT_PER_M  = 0.0028
-_PRICE_OUTPUT_PER_M           = 0.280
-
 # JD word limit  --  truncate extremely long JDs.
 _JD_WORD_LIMIT = 1_200
 
@@ -76,30 +70,9 @@ _MAX_RETRIES = 2
 # ------------------------------------------------------------------------------
 # Loaders
 # ------------------------------------------------------------------------------
-def load_env() -> tuple[str, str]:
-    """Load and validate required env vars from .env file."""
-    # Try local .env first, then fall back to Resume Maker's .env.
-    if ENV_FILE.exists():
-        load_dotenv(ENV_FILE)
-    else:
-        fallback_env = BASE_DIR.parent / "Resume Maker" / ".env"
-        if fallback_env.exists():
-            load_dotenv(fallback_env)
-            print(f"[INFO] Using .env from Resume Maker (no local .env found)")
-
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    model   = os.getenv("DEEPSEEK_MODEL",   "deepseek-v4-pro").strip()
-
-    if api_key == "":
-        sys.exit(
-            "\n[ERROR] DEEPSEEK_API_KEY not found.\n"
-            f"  -> Create '{ENV_FILE}' and set:\n"
-            "       DEEPSEEK_API_KEY=your_key_here\n"
-            "       DEEPSEEK_MODEL=deepseek-v4-pro\n"
-            f"\n  Or copy your .env from Resume Maker:\n"
-            f"       copy \"..\\Resume Maker\\.env\" \"{ENV_FILE}\"\n"
-        )
-    return api_key, model
+def load_env() -> AIConfig:
+    """Load and validate the local or project-root OpenRouter configuration."""
+    return load_ai_config(ENV_FILE, BASE_DIR.parent / ".env")
 
 
 def load_data_pool() -> dict:
@@ -213,31 +186,23 @@ def collect_seed_sentences(motivation_data: dict | None) -> str | None:
 # ------------------------------------------------------------------------------
 # API call
 # ------------------------------------------------------------------------------
-def call_deepseek(
-    api_key: str,
-    model: str,
+def call_openrouter(
+    config: AIConfig,
     system_msg: str,
     user_msg: str,
 ) -> tuple[str, dict]:
     """
-    Send the prompt to DeepSeek V4 Flash (non-thinking mode).
+    Send the prompt through OpenRouter's OpenAI-compatible API.
 
-    Thinking is explicitly disabled via extra_body — cover letter generation
-    is a narrative formatting task, not a reasoning problem. Eliminating
-    thinking tokens cuts latency and cost by ~50% with zero quality loss.
-
-    Prefix caching: the PCB system message (~1,400 tokens) is stable across
-    runs and gets cached server-side after the first call at $0.0028/1M.
+    Provider-specific reasoning controls are intentionally not sent because the
+    configured OpenRouter model may come from any supported provider.
     """
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://api.deepseek.com",
-    )
+    client = config.client()
 
-    print(f"[INFO] Sending prompt to '{model}' | thinking=disabled | temperature=0.7")
+    print(f"[INFO] Sending prompt to '{config.model}' via OpenRouter | temperature=0.7")
 
     response = client.chat.completions.create(
-        model=model,
+        model=config.model,
         messages=[
             {"role": "system", "content": system_msg},
             {"role": "user",   "content": user_msg},
@@ -246,8 +211,7 @@ def call_deepseek(
         stream=True,
         temperature=0.7,
         stream_options={"include_usage": True},
-        # Explicitly disable thinking mode — V4 Flash defaults to thinking ON.
-        extra_body={"thinking": {"type": "disabled"}},
+        **config.request_kwargs(),
     )
 
     print("\n[API] Connected. Streaming response in real-time...\n")
@@ -261,13 +225,13 @@ def call_deepseek(
         if hasattr(chunk, "usage") and chunk.usage:
             raw_usage = chunk.usage
 
-            # Thinking tokens (should be 0 with thinking disabled).
+            # Track reasoning-token fields when the selected model reports them.
             thinking_count = 0
             details = getattr(raw_usage, "completion_tokens_details", None)
             if details and hasattr(details, "reasoning_tokens"):
                 thinking_count = details.reasoning_tokens or 0
 
-            # Prefix cache hit/miss (DeepSeek-specific fields).
+            # Prefix cache hit/miss fields are provider-dependent.
             prompt_details = getattr(raw_usage, "prompt_tokens_details", None)
             cache_hit_tokens  = 0
             cache_miss_tokens = 0
@@ -466,8 +430,8 @@ def _print_latex_error(log_text: str) -> None:
     )
 
 
-def print_usage_summary(usage: dict, model: str) -> None:
-    """Print a concise token-usage and estimated cost report with cache breakdown."""
+def print_usage_summary(usage: dict, config: AIConfig) -> None:
+    """Print token usage without hard-coding provider/model pricing."""
     p_tok   = usage["prompt_tokens"]
     c_tok   = usage["completion_tokens"]
     t_tok   = usage["total_tokens"]
@@ -475,34 +439,19 @@ def print_usage_summary(usage: dict, model: str) -> None:
     hit_tok = usage.get("cache_hit_tokens",  0)
     mis_tok = usage.get("cache_miss_tokens", 0)
 
-    if hit_tok == 0 and mis_tok == 0:
-        mis_tok = p_tok
-
-    cost_usd = (
-        (mis_tok / 1_000_000 * _PRICE_INPUT_CACHE_MISS_PER_M)
-        + (hit_tok / 1_000_000 * _PRICE_INPUT_CACHE_HIT_PER_M)
-        + (c_tok   / 1_000_000 * _PRICE_OUTPUT_PER_M)
-    )
-    cost_no_cache = (
-        (p_tok / 1_000_000 * _PRICE_INPUT_CACHE_MISS_PER_M)
-        + (c_tok / 1_000_000 * _PRICE_OUTPUT_PER_M)
-    )
-    cache_saving = cost_no_cache - cost_usd
-
     print("\n" + "-" * 48)
-    print(f"  Model            : {model}")
+    print("  Provider         : OpenRouter")
+    print(f"  Model            : {config.model}")
     print(f"  Prompt tokens    : {p_tok:,}")
     if hit_tok or mis_tok:
-        print(f"    |- Cache hit     : {hit_tok:,}  ($0.0028/1M -- prefix cached)")
+        print(f"    |- Cache hit     : {hit_tok:,}")
         _miss_label = "\\- Cache miss"
-        print(f"    {_miss_label}    : {mis_tok:,}  ($0.140/1M  -- first-time tokens)")
+        print(f"    {_miss_label}    : {mis_tok:,}")
     if th_tok:
         print(f"  Thinking tokens  : {th_tok:,}  (!) reasoning cost (should be 0)")
     print(f"  Completion tokens: {c_tok:,}")
     print(f"  Total tokens     : {t_tok:,}")
-    print(f"  Est. cost        : ${cost_usd:.5f} USD")
-    if cache_saving > 0.000_01:
-        print(f"  Cache saved      : ${cache_saving:.5f} USD  [cached]")
+    print("  Est. cost        : See OpenRouter usage/pricing for the selected model")
     print("-" * 48 + "\n")
 
 
@@ -510,7 +459,7 @@ def print_usage_summary(usage: dict, model: str) -> None:
 # Entry point
 # ------------------------------------------------------------------------------
 def main() -> None:
-    api_key, model    = load_env()
+    config            = load_env()
     data_pool         = load_data_pool()
     motivation_data   = load_motivation_data()
     job_description   = collect_job_description()
@@ -534,8 +483,8 @@ def main() -> None:
                 "Zero prose. Zero markdown. Zero backticks."
             )
 
-        raw_output, usage = call_deepseek(
-            api_key, model,
+        raw_output, usage = call_openrouter(
+            config,
             system_msg,
             user_msg + retry_suffix,
         )
@@ -562,7 +511,7 @@ def main() -> None:
     else:
         print("[SKIP] PDF compilation skipped due to package errors above.\n")
 
-    print_usage_summary(usage, model)
+    print_usage_summary(usage, config)
     print("[OK] Done. Your cover letter is ready.\n")
 
 

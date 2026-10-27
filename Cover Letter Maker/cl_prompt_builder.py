@@ -265,7 +265,7 @@ def build_cl_prompt(
         "\\begin{document}\n"
         "\\begin{flushleft}\n"
         "  \\textbf{Arpan Padhi}\\\\\n"
-        "  Bhubaneswar, India\\\\\n"
+         "  Bengaluru, India\\\\\n"
         "  \\href{mailto:arpanpadhi2004@gmail.com}{arpanpadhi2004@gmail.com}"
         " $|$ \\href{https://linkedin.com/in/arpanpadhi}{linkedin.com/in/arpanpadhi}\n"
         "\\end{flushleft}\n"

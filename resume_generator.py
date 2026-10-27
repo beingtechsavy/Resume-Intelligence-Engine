@@ -11,7 +11,7 @@ Flow:
     2. Load data_pool.json
     3. Collect Job Description (multiline, type END on a new line to finish)
     4. Build prompt via prompt_builder
-    5. Call DeepSeek API
+    5. Call OpenRouter through the OpenAI-compatible API
     6. Strip any accidental markdown fences
     7. Write output.tex
     8. Extract Company + Role from the LaTeX comment header
@@ -21,7 +21,6 @@ Flow:
 
 import json
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -29,9 +28,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from dotenv import load_dotenv
-from openai import OpenAI
-
+from ai_config import AIConfig, load_ai_config
+from ats_validator import validate_one_page_budget, validate_resume_ats
 from prompt_builder import build_prompt
 
 # Suppress the openai + httpx libraries' own progress/debug output.
@@ -51,18 +49,9 @@ PMOTIVATION_FILE = BASE_DIR / "motivation_data.json"
 OUTPUT_TEX  = BASE_DIR / "output.tex"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 
-# LaTeX output token ceiling.
-# A rich 1-page resume: ~2,000–2,800 tokens. 2-page: ~4,000–5,500.
-# 5,000 is generous headroom without leaving 3,000 tokens of unused capacity.
-MAX_OUTPUT_TOKENS = 5_000
-
-# DeepSeek V4 Flash pricing (2026-06).
-# Cache-miss input : $0.140 / 1M tokens   (~3x cheaper than V4 Pro)
-# Cache-hit input  : $0.0028 / 1M tokens  (prefix caching — PCB + DATA_POOL reuse)
-# Output           : $0.280 / 1M tokens   (~3x cheaper than V4 Pro)
-_PRICE_INPUT_CACHE_MISS_PER_M = 0.140
-_PRICE_INPUT_CACHE_HIT_PER_M  = 0.0028
-_PRICE_OUTPUT_PER_M           = 0.280
+# One-page LaTeX resume output ceiling. Keep enough headroom for valid LaTeX
+# while preventing the model from expanding into a two-page document.
+MAX_OUTPUT_TOKENS = 3_500
 
 # JD word limit — truncate extremely long JDs to keep prompt readable.
 _JD_WORD_LIMIT = 1_200
@@ -71,20 +60,9 @@ _JD_WORD_LIMIT = 1_200
 _MAX_RETRIES = 2
 
 
-def load_env() -> tuple[str, str]:
-    """Load and validate required env vars from .env file."""
-    load_dotenv(ENV_FILE)
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    model   = os.getenv("DEEPSEEK_MODEL",   "deepseek-v4-pro").strip()
-
-    if api_key == "":
-        sys.exit(
-            "\n[ERROR] DEEPSEEK_API_KEY not found.\n"
-            f"  → Create '{ENV_FILE}' and set:\n"
-            "       DEEPSEEK_API_KEY=your_key_here\n"
-            "       DEEPSEEK_MODEL=deepseek-v4-pro\n"
-        )
-    return api_key, model
+def load_env() -> AIConfig:
+    """Load and validate the local OpenRouter configuration."""
+    return load_ai_config(ENV_FILE)
 
 
 def load_data_pool() -> dict:
@@ -133,34 +111,23 @@ def collect_job_description() -> str:
     return jd
 
 
-def call_deepseek(
-    api_key: str,
-    model: str,
+def call_openrouter(
+    config: AIConfig,
     system_msg: str,
     user_msg: str,
 ) -> tuple[str, dict]:
     """
-    Send the prompt to DeepSeek V4 Flash (non-thinking mode).
+    Send the prompt through OpenRouter's OpenAI-compatible API.
 
-    V4 Flash is explicitly told to skip chain-of-thought reasoning via
-    extra_body={"thinking": {"type": "disabled"}}. This eliminates thinking
-    tokens entirely — resume generation is a formatting task, not a reasoning
-    problem. Thinking adds latency and ~3× cost with zero quality gain here.
-
-    Prefix caching: the system message (PCB, ~1,100 tokens) and the DATA_POOL
-    prefix of the user message are stable across runs. DeepSeek caches these
-    server-side after the first call, charging cache-hit rates (~50× cheaper
-    than cache-miss). Cache hit tokens are reported in usage.prompt_cache_hit_tokens.
+    Provider-specific reasoning controls are intentionally not sent because the
+    configured OpenRouter model may come from any supported provider.
     """
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://api.deepseek.com",
-    )
+    client = config.client()
 
-    print(f"\n[INFO] Sending prompt to '{model}' | thinking=disabled | temperature=0.7")
+    print(f"\n[INFO] Sending prompt to '{config.model}' via OpenRouter | temperature=0.7")
 
     response = client.chat.completions.create(
-        model=model,
+        model=config.model,
         messages=[
             {"role": "system", "content": system_msg},
             {"role": "user",   "content": user_msg},
@@ -169,9 +136,7 @@ def call_deepseek(
         stream=True,
         temperature=0.7,
         stream_options={"include_usage": True},
-        # Explicitly disable thinking mode — V4 Flash defaults to thinking ON.
-        # Disabling it eliminates reasoning tokens and reduces latency significantly.
-        extra_body={"thinking": {"type": "disabled"}},
+        **config.request_kwargs(),
     )
 
     print("\n[API] Connected. Streaming response in real-time...\n")
@@ -185,15 +150,13 @@ def call_deepseek(
         if hasattr(chunk, "usage") and chunk.usage:
             raw_usage = chunk.usage
 
-            # Thinking tokens (should be 0 with thinking disabled, but track anyway).
+            # Track reasoning-token fields when the selected model reports them.
             thinking_count = 0
             details = getattr(raw_usage, "completion_tokens_details", None)
             if details and hasattr(details, "reasoning_tokens"):
                 thinking_count = details.reasoning_tokens or 0
 
-            # Prefix cache hit/miss tokens (DeepSeek-specific fields).
-            # cache_hit_tokens  → charged at $0.0028/1M (50× cheaper than cache miss)
-            # cache_miss_tokens → charged at $0.140/1M  (full price)
+            # Prefix cache hit/miss fields are provider-dependent.
             prompt_details = getattr(raw_usage, "prompt_tokens_details", None)
             cache_hit_tokens  = 0
             cache_miss_tokens = 0
@@ -408,8 +371,8 @@ def _print_latex_error(log_text: str) -> None:
     )
 
 
-def print_usage_summary(usage: dict, model: str) -> None:
-    """Print a concise token-usage and estimated cost report with cache breakdown."""
+def print_usage_summary(usage: dict, config: AIConfig) -> None:
+    """Print token usage without hard-coding provider/model pricing."""
     p_tok        = usage["prompt_tokens"]
     c_tok        = usage["completion_tokens"]
     t_tok        = usage["total_tokens"]
@@ -417,38 +380,19 @@ def print_usage_summary(usage: dict, model: str) -> None:
     hit_tok      = usage.get("cache_hit_tokens",  0)
     miss_tok     = usage.get("cache_miss_tokens", 0)
 
-    # If cache breakdown is not available, treat all prompt tokens as cache miss.
-    if hit_tok == 0 and miss_tok == 0:
-        miss_tok = p_tok
-
-    # Cost = (cache-miss input × miss rate) + (cache-hit input × hit rate) + (output × output rate)
-    cost_usd = (
-        (miss_tok / 1_000_000 * _PRICE_INPUT_CACHE_MISS_PER_M)
-        + (hit_tok  / 1_000_000 * _PRICE_INPUT_CACHE_HIT_PER_M)
-        + (c_tok    / 1_000_000 * _PRICE_OUTPUT_PER_M)
-    )
-
-    # What it would have cost with zero caching (all miss), for savings display.
-    cost_no_cache = (
-        (p_tok / 1_000_000 * _PRICE_INPUT_CACHE_MISS_PER_M)
-        + (c_tok / 1_000_000 * _PRICE_OUTPUT_PER_M)
-    )
-    cache_saving = cost_no_cache - cost_usd
-
     print("\n" + "-" * 48)
-    print(f"  Model            : {model}")
+    print("  Provider         : OpenRouter")
+    print(f"  Model            : {config.model}")
     print(f"  Prompt tokens    : {p_tok:,}")
     if hit_tok or miss_tok:
-        print(f"    |- Cache hit     : {hit_tok:,}  ($0.0028/1M -- prefix cached)")
+        print(f"    |- Cache hit     : {hit_tok:,}")
         _miss_label = "\\- Cache miss"
-        print(f"    {_miss_label}    : {miss_tok:,}  ($0.140/1M  -- first-time tokens)")
+        print(f"    {_miss_label}    : {miss_tok:,}")
     if th_tok:
         print(f"  Thinking tokens  : {th_tok:,}  (!) reasoning cost (should be 0)")
     print(f"  Completion tokens: {c_tok:,}")
     print(f"  Total tokens     : {t_tok:,}")
-    print(f"  Est. cost        : ${cost_usd:.5f} USD")
-    if cache_saving > 0.000_01:
-        print(f"  Cache saved      : ${cache_saving:.5f} USD  [cached]")
+    print("  Est. cost        : See OpenRouter usage/pricing for the selected model")
     print("-" * 48 + "\n")
 
 
@@ -456,7 +400,7 @@ def print_usage_summary(usage: dict, model: str) -> None:
 # Entry point
 # ──────────────────────────────────────────────────────────────────────────────
 def main() -> None:
-    api_key, model  = load_env()
+    config          = load_env()
     data_pool       = load_data_pool()
     job_description = collect_job_description()
 
@@ -471,19 +415,21 @@ def main() -> None:
         if attempt > 0:
             print(f"\n[RETRY] Attempt {attempt + 1}/{1 + _MAX_RETRIES} — injecting stricter reminder …")
             retry_suffix = (
-                "\n\nCRITICAL REMINDER: Your previous response was NOT valid LaTeX. "
-                "Output ONLY raw LaTeX starting with \\documentclass. "
-                "Zero prose. Zero markdown. Zero backticks."
+                "\n\nCRITICAL REMINDER: Your previous response violated the output contract "
+                "or exceeded the one-page content budget. Output ONLY raw LaTeX "
+                "starting with \\documentclass, with maximum 2 experience entries, "
+                "3 projects, 2 certifications, 3 skill rows, and 2 bullets per "
+                "experience/project entry. Zero prose. Zero markdown. Zero backticks."
             )
 
-        raw_output, usage = call_deepseek(
-            api_key, model,
+        raw_output, usage = call_openrouter(
+            config,
             system_msg,
             user_msg + retry_suffix,
         )
         latex = strip_markdown_fences(raw_output)
 
-        if is_valid_latex(latex):
+        if is_valid_latex(latex) and validate_one_page_budget(latex)["status"] != "fail":
             break
         if attempt < _MAX_RETRIES:
             print("[WARN] Response does not look like LaTeX — will retry.")
@@ -492,6 +438,7 @@ def main() -> None:
 
     # ── Validate packages ──────────────────────────────────────────────────────
     latex_is_clean = validate_latex_packages(latex)
+    ats_report = validate_resume_ats(latex, job_description)
 
     # -- Save & compile ---------------------------------------------------------
     save_latex(latex)
@@ -504,7 +451,14 @@ def main() -> None:
     else:
         print("[SKIP] PDF compilation skipped due to package errors above.\n")
 
-    print_usage_summary(usage, model)
+    ats_summary = ats_report["summary"]
+    print(
+        "[ATS] Local validation -> "
+        f"{ats_report['status']} "
+        f"({ats_summary['passed']} pass, {ats_summary['review']} review, {ats_summary['failed']} fail)"
+    )
+
+    print_usage_summary(usage, config)
     print("[OK] Done. Your resume is ready.\n")
 
 

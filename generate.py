@@ -22,7 +22,7 @@ Why parallel?
     Both API calls are fully independent I/O-bound network requests.
     Sequential: ~14s + ~13s = ~27s total.
     Parallel:   max(14s, 13s) = ~14s total.  Nearly half the wait time.
-    DeepSeek V4 Flash allows 2,500 concurrent calls -- no throttling risk.
+    OpenRouter provides a single OpenAI-compatible endpoint for the selected model.
     Cost is identical (you pay per token, not per second).
 
 Output files:
@@ -32,16 +32,14 @@ Output files:
 
 import json
 import logging
-import os
 import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from dotenv import load_dotenv
-from openai import OpenAI
-
+from ai_config import AIConfig, load_ai_config
+from ats_validator import validate_one_page_budget, validate_resume_ats
 from prompt_builder import build_prompt
 from cl_prompt_builder import build_cl_prompt
 
@@ -64,8 +62,8 @@ ENV_FILE        = BASE_DIR / ".env"
 # ─────────────────────────────────────────────────────────────────────────────
 # Config
 # ─────────────────────────────────────────────────────────────────────────────
-# CV is a full resume (multi-section); CL is a tight 350-500 word letter.
-MAX_CV_TOKENS = 5_000
+# CV is constrained to one page; CL remains a tight 350-500 word letter.
+MAX_CV_TOKENS = 3_500
 MAX_CL_TOKENS = 4_000
 
 # Max auto-retries if the model returns non-LaTeX output.
@@ -74,11 +72,6 @@ _MAX_RETRIES = 2
 # JD word limit -- truncate extremely long JDs to keep prompt cost in check.
 _JD_WORD_LIMIT = 1_200
 
-# DeepSeek V4 Flash pricing (2026-06).
-_PRICE_MISS_PER_M = 0.140   # cache-miss input  : $0.140 / 1M tokens
-_PRICE_HIT_PER_M  = 0.0028  # cache-hit input   : $0.0028 / 1M tokens (~50× cheaper)
-_PRICE_OUT_PER_M  = 0.280   # output            : $0.280 / 1M tokens
-
 # Packages that crash pdflatex (XeLaTeX/LuaLaTeX-only).
 _FORBIDDEN_PACKAGES = {"fontspec", "xunicode", "xltxtra", "unicode-math", "polyglossia"}
 
@@ -86,17 +79,9 @@ _FORBIDDEN_PACKAGES = {"fontspec", "xunicode", "xltxtra", "unicode-math", "polyg
 # ─────────────────────────────────────────────────────────────────────────────
 # Loaders
 # ─────────────────────────────────────────────────────────────────────────────
-def load_env() -> tuple[str, str]:
-    """Load and validate API key + model from .env."""
-    load_dotenv(ENV_FILE)
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    model   = os.getenv("DEEPSEEK_MODEL",   "deepseek-v4-flash").strip()
-    if not api_key:
-        sys.exit(
-            "\n[ERROR] DEEPSEEK_API_KEY not found.\n"
-            f"  -> Set it in '{ENV_FILE}'\n"
-        )
-    return api_key, model
+def load_env() -> AIConfig:
+    """Load and validate the local OpenRouter configuration."""
+    return load_ai_config(ENV_FILE)
 
 
 def load_data_pool() -> dict:
@@ -206,8 +191,7 @@ def validate_latex_packages(latex: str, label: str) -> bool:
 # API call (batch mode -- cleaner for parallel execution)
 # ─────────────────────────────────────────────────────────────────────────────
 def call_api(
-    api_key: str,
-    model: str,
+    config: AIConfig,
     system_msg: str,
     user_msg: str,
     max_tokens: int,
@@ -226,22 +210,20 @@ def call_api(
     of watching text appear character-by-character, you see a clean
     "[OK] CV complete (14.2s)" line when each finishes.
 
-    Thinking disabled: resume/CL generation is a formatting task, not a
-    reasoning problem.  Disabling thinking eliminates ~2,800 token overhead
-    at output prices with zero quality loss.
+    Provider-specific reasoning controls are intentionally omitted so the
+    configured OpenRouter model can come from any supported provider.
     """
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    client = config.client()
 
     response = client.chat.completions.create(
-        model=model,
+        model=config.model,
         messages=[
             {"role": "system", "content": system_msg},
             {"role": "user",   "content": user_msg},
         ],
         max_tokens=max_tokens,
         temperature=0.7,
-        # Disable thinking -- V4 Flash defaults to thinking ON.
-        extra_body={"thinking": {"type": "disabled"}},
+        **config.request_kwargs(),
     )
 
     content = response.choices[0].message.content or ""
@@ -253,7 +235,7 @@ def call_api(
     if details:
         thinking = getattr(details, "reasoning_tokens", 0) or 0
 
-    # Cache hit / miss breakdown (DeepSeek-specific fields).
+    # Cache hit / miss fields are provider-dependent.
     prompt_details = getattr(raw, "prompt_tokens_details", None)
     hit_tok  = 0
     miss_tok = 0
@@ -281,7 +263,7 @@ def call_api(
 # ─────────────────────────────────────────────────────────────────────────────
 # Task runners -- called by ThreadPoolExecutor workers
 # ─────────────────────────────────────────────────────────────────────────────
-def run_cv(api_key: str, model: str, data_pool: dict, jd: str) -> tuple[str, dict, float]:
+def run_cv(config: AIConfig, data_pool: dict, jd: str) -> tuple[str, dict, float]:
     """
     Generate CV LaTeX.
     Returns (latex_string, usage_dict, elapsed_seconds).
@@ -296,23 +278,24 @@ def run_cv(api_key: str, model: str, data_pool: dict, jd: str) -> tuple[str, dic
     for attempt in range(1 + _MAX_RETRIES):
         if attempt > 0:
             retry_suffix = (
-                "\n\nCRITICAL REMINDER: Your previous response was NOT valid LaTeX. "
-                "Output ONLY raw LaTeX starting with \\documentclass. "
-                "Zero prose. Zero markdown. Zero backticks."
+                "\n\nCRITICAL REMINDER: Your previous response violated the output contract "
+                "or exceeded the one-page content budget. Output ONLY raw LaTeX "
+                "starting with \\documentclass, with maximum 2 experience entries, "
+                "3 projects, 2 certifications, 3 skill rows, and 2 bullets per "
+                "experience/project entry. Zero prose. Zero markdown. Zero backticks."
             )
         content, usage = call_api(
-            api_key, model, system_msg, user_msg + retry_suffix, MAX_CV_TOKENS
+            config, system_msg, user_msg + retry_suffix, MAX_CV_TOKENS
         )
         latex = strip_markdown_fences(content)
-        if is_valid_latex(latex):
+        if is_valid_latex(latex) and validate_one_page_budget(latex)["status"] != "fail":
             break
 
     return latex, usage, time.time() - t0
 
 
 def run_cl(
-    api_key: str,
-    model: str,
+    config: AIConfig,
     data_pool: dict,
     motivation_data: dict,
     jd: str,
@@ -339,13 +322,43 @@ def run_cl(
                 "Zero prose. Zero markdown. Zero backticks."
             )
         content, usage = call_api(
-            api_key, model, system_msg, user_msg + retry_suffix, MAX_CL_TOKENS
+            config, system_msg, user_msg + retry_suffix, MAX_CL_TOKENS
         )
         latex = strip_markdown_fences(content)
         if is_valid_latex(latex):
             break
 
     return latex, usage, time.time() - t0
+
+
+def run_parallel_generation(
+    config: AIConfig,
+    data_pool: dict,
+    motivation_data: dict,
+    jd: str,
+) -> tuple[tuple[str, dict, float], tuple[str, dict, float], float]:
+    """Run the resume and cover-letter calls concurrently for one JD."""
+    wall_start = time.time()
+    cv_result = None
+    cl_result = None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        fut_cv = executor.submit(run_cv, config, data_pool, jd)
+        fut_cl = executor.submit(run_cl, config, data_pool, motivation_data, jd)
+
+        for future in as_completed({fut_cv, fut_cl}):
+            result = future.result()
+            elapsed = result[2]
+            if future is fut_cv:
+                cv_result = result
+                print(f"  [OK] CV   complete  ({elapsed:.1f}s)")
+            else:
+                cl_result = result
+                print(f"  [OK] CL   complete  ({elapsed:.1f}s)")
+
+    if cv_result is None or cl_result is None:
+        raise RuntimeError("parallel generation did not return both artifacts")
+    return cv_result, cl_result, time.time() - wall_start
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -366,7 +379,7 @@ def extract_company_role(latex: str) -> tuple[str, str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Combined cost summary
+# Combined usage summary
 # ─────────────────────────────────────────────────────────────────────────────
 def print_combined_summary(
     cv_usage: dict,
@@ -374,23 +387,9 @@ def print_combined_summary(
     cv_elapsed: float,
     cl_elapsed: float,
     wall_time: float,
-    model: str,
+    config: AIConfig,
 ) -> None:
-    """Print a side-by-side CV | CL | TOTAL cost and timing table."""
-
-    def _cost(u: dict) -> float:
-        hit  = u.get("cache_hit_tokens",  0)
-        miss = u.get("cache_miss_tokens", 0) or u.get("prompt_tokens", 0)
-        out  = u.get("completion_tokens", 0)
-        return (
-            miss / 1_000_000 * _PRICE_MISS_PER_M
-            + hit / 1_000_000 * _PRICE_HIT_PER_M
-            + out / 1_000_000 * _PRICE_OUT_PER_M
-        )
-
-    cv_cost  = _cost(cv_usage)
-    cl_cost  = _cost(cl_usage)
-    tot_cost = cv_cost + cl_cost
+    """Print a side-by-side CV | CL | TOTAL token and timing table."""
 
     cv_p  = cv_usage.get("prompt_tokens",     0)
     cl_p  = cl_usage.get("prompt_tokens",     0)
@@ -405,7 +404,7 @@ def print_combined_summary(
 
     W = 62
     print("\n" + "=" * W)
-    print(f"  APPLICATION PACKET -- COST SUMMARY  |  {model}")
+    print(f"  APPLICATION PACKET -- USAGE SUMMARY  |  OpenRouter / {config.model}")
     print("=" * W)
     print(f"  {'':24}{'CV':>10}  {'CL':>10}  {'TOTAL':>10}")
     print(f"  {'-'*24}{'-'*10}  {'-'*10}  {'-'*10}")
@@ -416,7 +415,7 @@ def print_combined_summary(
     if cv_th or cl_th:
         print(f"  {'Thinking tokens':<24}{cv_th:>10,}  {cl_th:>10,}  {cv_th+cl_th:>10,}  (!) should be 0")
     print(f"  {'Completion tokens':<24}{cv_c:>10,}  {cl_c:>10,}  {cv_c+cl_c:>10,}")
-    print(f"  {'Est. cost':<24}${cv_cost:>9.5f}  ${cl_cost:>9.5f}  ${tot_cost:>9.5f}")
+    print(f"  {'Est. cost':<24}{'see OpenRouter dashboard':>10}  {'see OpenRouter dashboard':>10}  {'see OpenRouter dashboard':>10}")
     print(f"  {'-'*24}{'-'*10}  {'-'*10}  {'-'*10}")
     print(f"  {'API time':<24}{cv_elapsed:>9.1f}s  {cl_elapsed:>9.1f}s")
     sequential = cv_elapsed + cl_elapsed
@@ -429,7 +428,7 @@ def print_combined_summary(
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
 def main() -> None:
-    api_key, model  = load_env()
+    config          = load_env()
     data_pool       = load_data_pool()
     motivation_data = load_motivation_data()
     jd              = collect_job_description()
@@ -437,28 +436,16 @@ def main() -> None:
     # Ensure docs/ exists.
     DOCS_DIR.mkdir(exist_ok=True)
 
-    print(f"\n[INFO] Model: {model} | thinking=disabled | parallel=True")
+    print(f"\n[INFO] Provider: OpenRouter | Model: {config.model} | parallel=True")
+    if config.provider_options:
+        print(f"[INFO] Provider routing: {config.provider_options}")
+    if config.reasoning_options:
+        print(f"[INFO] Reasoning policy: {config.reasoning_options}")
     print("[...] Generating CV and Cover Letter simultaneously...\n")
 
-    wall_start = time.time()
-    cv_result  = None
-    cl_result  = None
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        fut_cv = executor.submit(run_cv, api_key, model, data_pool, jd)
-        fut_cl = executor.submit(run_cl, api_key, model, data_pool, motivation_data, jd)
-
-        for future in as_completed({fut_cv, fut_cl}):
-            result = future.result()   # re-raises any exception from the thread
-            elapsed = result[2]
-            if future is fut_cv:
-                cv_result = result
-                print(f"  [OK] CV   complete  ({elapsed:.1f}s)")
-            else:
-                cl_result = result
-                print(f"  [OK] CL   complete  ({elapsed:.1f}s)")
-
-    wall_time = time.time() - wall_start
+    cv_result, cl_result, wall_time = run_parallel_generation(
+        config, data_pool, motivation_data, jd
+    )
 
     cv_latex, cv_usage, cv_elapsed = cv_result
     cl_latex, cl_usage, cl_elapsed = cl_result
@@ -466,6 +453,7 @@ def main() -> None:
     # Validate packages (warn but don't block save).
     cv_clean = validate_latex_packages(cv_latex, "CV")
     cl_clean = validate_latex_packages(cl_latex, "CL")
+    ats_report = validate_resume_ats(cv_latex, jd)
 
     # Save -- always overwrite.
     CV_OUTPUT.write_text(cv_latex, encoding="utf-8")
@@ -482,10 +470,17 @@ def main() -> None:
     if not cl_clean:
         print("[WARN] CL has forbidden packages -- review output manually.")
 
+    ats_summary = ats_report["summary"]
+    print(
+        "[ATS] Local CV validation -> "
+        f"{ats_report['status']} "
+        f"({ats_summary['passed']} pass, {ats_summary['review']} review, {ats_summary['failed']} fail)"
+    )
+
     print_combined_summary(
         cv_usage, cl_usage,
         cv_elapsed, cl_elapsed,
-        wall_time, model,
+        wall_time, config,
     )
     print("[OK] Application packet ready.")
     print(f"     Upload docs/CV_Output.tex and docs/CL_Output.tex to Overleaf.\n")

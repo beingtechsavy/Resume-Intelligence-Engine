@@ -16,6 +16,8 @@ Architecture (mirrors prompt_builder.py from Resume Maker):
 
 import json
 
+from resume_selection import build_curated_profile
+
 # ---------------------------------------------------------------------------
 # COVER LETTER PROMPT CONTROL BLOCK
 #
@@ -193,7 +195,16 @@ If it sounds like it could have been written by anyone → rewrite.
 ---
 
 # GROUND RULES
-- Use ONLY information from DATA_POOL and MOTIVATION_DATA. No fabrication.
+- Use ONLY information from SELECTED_DATA_POOL and MOTIVATION_DATA. No fabrication.
+- Do not reintroduce suppressed experience from the full local profile. A
+  podcast/content internship is not technical experience unless the local
+  selection explicitly includes it for this JD.
+- Respect the owner's user_priority labels in RESUME_SELECTION: primary evidence
+  is normally available, secondary evidence needs a direct JD bridge,
+  keyword_dependent evidence is rare and needs a direct JD signal, and excluded
+  evidence must never be reintroduced.
+- Use the selected evidence as the factual boundary; motivation data supplies
+  voice and framing, not permission to add an unselected role or skill.
 - MOTIVATION_DATA.identity.core_thesis is the spine of the letter. Every paragraph connects back to it.
 - MOTIVATION_DATA.role_adaptation tells you which stories to lead with. Follow it.
 - MOTIVATION_DATA.what_arpan_is_not tells you what framings to avoid. Respect it.
@@ -219,13 +230,30 @@ def build_cl_prompt(
     :param seed_sentences:   Optional free-text sentences from the user.
     :return:                 (system_content, user_content) tuple.
     """
-    # Minify JSON — saves ~20% tokens vs pretty-print.
-    minified_pool = json.dumps(data_pool, separators=(",", ":"), ensure_ascii=False)
+    # Use the same deterministic evidence slice as resume generation so the
+    # cover letter cannot revive an unrelated internship from the raw pool.
+    curated_pool, selection = build_curated_profile(data_pool, job_description)
+    minified_pool = json.dumps(curated_pool, separators=(",", ":"), ensure_ascii=False)
+    minified_selection = json.dumps(
+        {
+            "schema_version": selection["schema_version"],
+            "role_families": selection["role_families"],
+            "detected_skills": selection["detected_skills"],
+            "technical_demand": selection["technical_demand"],
+            "content_demand": selection["content_demand"],
+            "section_order": selection["section_order"],
+            "selected": selection["selected"],
+            "guardrails": selection["guardrails"],
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
 
     # Build user message parts.
     parts: list[str] = [
         "OUTPUT FINAL LATEX ONLY. No explanation. No thinking out loud.\n",
-        f"DATA_POOL:\n{minified_pool}\n",
+        f"SELECTED_DATA_POOL:\n{minified_pool}\n",
+        f"RESUME_SELECTION:\n{minified_selection}\n",
     ]
 
     if motivation_data:
@@ -265,7 +293,7 @@ def build_cl_prompt(
         "\\begin{document}\n"
         "\\begin{flushleft}\n"
         "  \\textbf{Arpan Padhi}\\\\\n"
-        "  Bhubaneswar, India\\\\\n"
+         "  Bengaluru, India\\\\\n"
         "  \\href{mailto:arpanpadhi2004@gmail.com}{arpanpadhi2004@gmail.com}"
         " $|$ \\href{https://linkedin.com/in/arpanpadhi}{linkedin.com/in/arpanpadhi}\n"
         "\\end{flushleft}\n"

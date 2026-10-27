@@ -1,18 +1,21 @@
 """
 prompt_builder.py
 -----------------
-Constructs the system (PCB) and user (data + JD) messages for the DeepSeek API call.
+Constructs the system (PCB) and user (data + JD) messages for the configured
+OpenRouter model.
 
 Architecture:
   SYSTEM message = PCB (Recruiter-First Prompt Control Block)
                    The model's operating identity. Never changes between runs.
                    Stable → eligible for prefix caching on repeated calls.
 
-  USER message   = DATA_POOL (minified JSON) + JOB_DESCRIPTION + OUTPUT_CONTRACT
+  USER message   = SELECTED_DATA_POOL (minified JSON) + JOB_DESCRIPTION + OUTPUT_CONTRACT
                    Changes every run. Token-optimised.
 """
 
 import json
+
+from resume_selection import build_curated_profile
 
 # ---------------------------------------------------------------------------
 # RECRUITER-FIRST PROMPT CONTROL BLOCK
@@ -30,8 +33,10 @@ You are a RECRUITER-FIRST Resume Intelligence Engine.
 Your one job: make a human recruiter stop skimming within 5 seconds and think:
 "This person fits this role exactly. I need to interview them."
 
-ATS does not score resumes. It is a database. Recruiters read manually and fast.
-Your enemy is invisibility, not rejection. Optimize for human attention, not keyword density.
+ATS software is a parser and routing database, not a human reviewer. Make the
+document easy for both systems and people: use standard headings, plain text,
+simple one-column structure, exact job language when it is truthful, and
+natural evidence-backed keywords. Never keyword-stuff or invent a match.
 
 ---
 
@@ -72,12 +77,14 @@ A project is not a list of technologies. A project is a story:
   What problem → What you built → What it achieved → What it signals about you
 Each project section must answer: "Why does THIS project matter for THIS role?"
 
-## LAW 5 — FULLNESS = READINESS
-A sparse resume signals inexperience. A full, confident resume signals readiness.
-For early-career candidates (< 3 years experience or < 5 data items):
-  Include ALL HIGH and MEDIUM relevance content from DATA_POOL.
-  Never discard content to appear "selective" — selectivity is a senior-profile strategy.
-  Use certifications, leadership, and coursework if they reinforce role alignment.
+## LAW 5 — ONE PAGE, RELEVANCE BEFORE FULLNESS
+The resume MUST fit on one page. The local selector has already classified and
+budgeted the evidence pool for this specific JOB_DESCRIPTION. Use only
+SELECTED_DATA_POOL items, and never bring a suppressed internship, project,
+skill, or activity back into the draft.
+When space is tight, omit the lowest-scoring selected item. Do not add a second
+page, shrink the document into unreadable text, or fill space with unrelated
+experience.
 
 ## LAW 6 — NATURAL KEYWORD USE
 Keywords must appear once, in context, within a meaningful achievement.
@@ -101,15 +108,28 @@ Craft the role-aligned headline: "[Exact Job Title] | [Top 3 aligned skills from
 This appears directly under the name. It is the single most important line on the resume.
 If the candidate's background does not match perfectly → find the closest truthful bridge.
 
-## STEP 3 — SELECT AND SEQUENCE CONTENT
-Rate every DATA_POOL item: HIGH / MEDIUM / LOW / IRRELEVANT to this specific role.
-Include ALL HIGH and MEDIUM items (LAW 5 for freshers).
-Place highest-impact content at the TOP of each section and the TOP of the resume.
+## STEP 3 — USE THE LOCAL SELECTION, THEN SEQUENCE CONTENT
+Do not reclassify the raw profile yourself. The local selector has already
+ranked the evidence against the JOB_DESCRIPTION and exposed only the permitted
+items in SELECTED_DATA_POOL. Follow its section_order and selected_item_ids.
+Respect the owner's user_priority labels in RESUME_SELECTION:
+  - primary: normally available when evidence status permits;
+  - secondary: use only when directly relevant to the JD;
+  - keyword_dependent: use rarely and only when the JD directly signals the
+    matching skill, domain, responsibility, or role family;
+  - exclude: never use.
+Place the highest-scoring selected evidence at the TOP of each section and the
+TOP of the resume. If no relevant experience is selected, omit Experience rather
+than inserting an unrelated role.
+Follow the one-page budget exactly: maximum 2 experience entries, maximum 3
+project entries, maximum 2 certifications, maximum 3 skill rows, and no more
+than 2 bullets per experience/project entry. Omit lower-scoring selected content
+when necessary.
 
 DEFAULT SECTION ORDER (follow this exactly unless a strong reason exists to deviate):
   1. Header (name, headline, contact)
-  2. Experience (internships, roles, leadership positions)
-  3. Projects (most role-relevant first)
+  2. Relevant experience or technical experience, only when selected
+  3. Projects (most role-relevant first; may come before experience)
   4. Education (degree, CGPA, coursework)
   5. Skills (languages, tools, frameworks — grouped by category)
   6. Achievements / Certifications / Additional (recognitions, certs, languages)
@@ -127,23 +147,48 @@ If any is NO → rewrite that section first.
 ---
 
 # GROUND RULES
-- Use ONLY information present in DATA_POOL. No fabrication. No invention.
+- Use ONLY information present in SELECTED_DATA_POOL. No fabrication. No invention.
 - If data is absent → omit. Never create metrics, tools, or roles.
-- Optimize for HUMAN SCAN. ATS is irrelevant.
-- DATA_POOL is the only source of truth.
+- Optimize for parser-safe text and a fast HUMAN SCAN together.
+- SELECTED_DATA_POOL is the only source of truth for this draft. Do not use
+  suppressed or unselected items from the full local profile.
+- Use standard section headings and simple bullets. Do not use tables, columns,
+  text boxes, images, icons, headers, or footers for resume content.
+- Keep the resume to one page. Do not use \\newpage, \\pagebreak, \\clearpage,
+  \\vfill, or a second-page continuation.
+- Mirror important JD terminology only when the selected evidence supports it;
+  use both a spelled-out term and its acronym when the JD uses both.
 """
 
 
 def build_prompt(data_pool: dict, job_description: str) -> tuple[str, str]:
     """
-    Returns (system_message, user_message) ready to send to the DeepSeek API.
+    Returns (system_message, user_message) ready to send to the configured model.
 
     :param data_pool:        Parsed data_pool.json dict.
     :param job_description:  Raw JD text from user input.
     :return:                 (system_content, user_content) tuple.
     """
-    # Minify the JSON — removes all whitespace, saves ~20% tokens vs pretty-print.
-    minified_pool = json.dumps(data_pool, separators=(",", ":"), ensure_ascii=False)
+    # Send a deterministic, role-specific slice of the profile instead of the
+    # full evidence pool.  This prevents a drafting model from choosing a
+    # non-technical internship simply because it is recent or well-described.
+    curated_pool, selection = build_curated_profile(data_pool, job_description)
+    minified_pool = json.dumps(curated_pool, separators=(",", ":"), ensure_ascii=False)
+    minified_selection = json.dumps(
+        {
+            "schema_version": selection["schema_version"],
+            "role_families": selection["role_families"],
+            "detected_skills": selection["detected_skills"],
+            "technical_demand": selection["technical_demand"],
+            "content_demand": selection["content_demand"],
+            "section_order": selection["section_order"],
+            "page_budget": selection["page_budget"],
+            "selected": selection["selected"],
+            "guardrails": selection["guardrails"],
+        },
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
 
     # -------------------------------------------------------------------------
     # OUTPUT CONTRACT — appended to the user turn (not the PCB).
@@ -188,7 +233,7 @@ def build_prompt(data_pool: dict, job_description: str) -> tuple[str, str]:
         "    \\small [email link] $|$ [linkedin link] $|$ [github link]\\\\\n"
         "    \\normalsize\\textbf{[Exact Job Title from JD]} $|$ [top 3 aligned skills]\n"
         "  \\end{center}\n"
-        "  \\section{Experience}  % omit if no relevant experience\n"
+         "  \\section{Experience}\n"
         "  \\begin{itemize}\n"
         "    \\resumeEntry{Role}{Organisation}{Dates}\n"
         "    \\begin{itemize}\\resumeItem{impact bullet}\\end{itemize}\n"
@@ -206,8 +251,11 @@ def build_prompt(data_pool: dict, job_description: str) -> tuple[str, str]:
         "  \\begin{itemize}\\resumeItem{...}\\end{itemize}\n"
         "\\end{document}\n\n"
 
-        "HARD RULES:\n"
-        "- NO \\vspace{} anywhere in the document body\n"
+         "HARD RULES:\n"
+         "- ONE PAGE ONLY: maximum 2 experience entries, 3 project entries, 2 certifications, 3 skill rows\n"
+         "- Maximum 2 bullets per experience/project entry; omit lower-scoring content when needed\n"
+         "- NO \\newpage, NO \\pagebreak, NO \\clearpage, NO \\vfill\n"
+         "- NO \\vspace{} anywhere in the document body\n"
         "- NO % comments inside \\begin{document}...\\end{document}\n"
         "- NO \\pagenumbering, NO \\pagestyle overrides after preamble\n"
         "- BANNED packages: fontspec, xunicode, xltxtra, unicode-math, polyglossia\n"
@@ -218,7 +266,8 @@ def build_prompt(data_pool: dict, job_description: str) -> tuple[str, str]:
 
     user_message = (
         "OUTPUT FINAL LATEX ONLY. No explanation. No thinking out loud.\n\n"
-        f"DATA_POOL:\n{minified_pool}\n\n"
+        f"SELECTED_DATA_POOL:\n{minified_pool}\n\n"
+        f"RESUME_SELECTION:\n{minified_selection}\n\n"
         f"JOB_DESCRIPTION:\n{job_description.strip()}"
         f"{output_contract}"
     )

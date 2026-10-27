@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="A local, evidence-backed resume workbench." />
+    <title>Resume Intelligence Engine</title>
+    <link rel="stylesheet" href="styles.css?v=20261024-4" />
+    <script src="app.js?v=20261024-4" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to workbench</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Workspace navigation">
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true">R<span>i</span></div>
+          <div>
+            <p class="eyebrow">Local workspace</p>
+            <p class="brand-name">Resume<br />Intelligence</p>
+          </div>
+        </div>
+
+        <nav class="primary-nav" aria-label="Primary">
+          <a class="nav-link is-active" href="#workbench" data-scroll-target="workbench">
+            <span class="nav-icon" aria-hidden="true">⌁</span>
+            <span>Workbench</span>
+            <span class="nav-key" aria-hidden="true">W</span>
+          </a>
+          <a class="nav-link" href="#profile" data-scroll-target="profile">
+            <span class="nav-icon" aria-hidden="true">◌</span>
+            <span>Profile</span>
+            <span class="nav-key" aria-hidden="true">P</span>
+          </a>
+          <a class="nav-link" href="#runs" data-scroll-target="runs">
+            <span class="nav-icon" aria-hidden="true">↗</span>
+            <span>Generation runs</span>
+            <span class="nav-key" aria-hidden="true">G</span>
+          </a>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="privacy-note">
+            <span class="status-dot status-dot--quiet" aria-hidden="true"></span>
+            <div>
+              <p class="label">Private by default</p>
+              <p>Only selected requests leave this machine.</p>
+            </div>
+          </div>
+          <p class="sidebar-version">RIE / local 01</p>
+        </div>
+      </aside>
+
+      <main id="main-content" class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Focused application workspace</p>
+            <h1>Find the evidence<br /><em>behind the opportunity.</em></h1>
+          </div>
+          <div class="health-pill" id="health-pill" role="status" aria-live="polite">
+            <span class="status-dot status-dot--loading" aria-hidden="true"></span>
+            <span id="health-label">Checking local engine…</span>
+          </div>
+        </header>
+
+        <div id="global-message" class="message-region" role="alert" aria-live="assertive" hidden></div>
+
+        <section id="workbench" class="workbench-section" aria-labelledby="workbench-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-index">01 / Triage</p>
+              <h2 id="workbench-title">Job description</h2>
+            </div>
+            <p class="section-aside">Paste the role once. The local matcher will show what is supported, what is provisional, and what needs a human look.</p>
+          </div>
+
+          <form id="job-form" class="job-form">
+            <label for="job-description" class="sr-only">Job description</label>
+            <textarea id="job-description" name="job_description" rows="12" maxlength="30000" placeholder="Paste a job description here…&#10;&#10;The matcher looks for role signals, explicit skills, experience gates, compensation and eligibility questions." required></textarea>
+            <div class="form-footer">
+              <span class="character-count" id="character-count">0 / 30,000</span>
+              <div class="form-actions">
+                <button class="button button--quiet" id="clear-job" type="button">Clear</button>
+                <button class="button button--primary" id="analyze-button" type="submit">
+                  <span>Analyze locally</span>
+                  <span class="button-arrow" aria-hidden="true">→</span>
+                </button>
+              </div>
+            </div>
+          </form>
+          <p class="form-hint"><span aria-hidden="true">⌘</span> Tip: use <kbd>Ctrl</kbd> + <kbd>Enter</kbd> to analyze from the editor.</p>
+        </section>
+
+        <section id="match-report" class="report-section" aria-labelledby="report-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-index">02 / Readout</p>
+              <h2 id="report-title">Explainable match report</h2>
+            </div>
+            <span class="section-badge">No ATS score</span>
+          </div>
+          <div id="report-content" class="report-content">
+            <div class="empty-state">
+              <div class="empty-glyph" aria-hidden="true">＋</div>
+              <h3>Your readout will appear here</h3>
+              <p>Start with a job description. Every signal will stay connected to the evidence that produced it.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="profile" class="profile-section" aria-labelledby="profile-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-index">03 / Context</p>
+              <h2 id="profile-title">Candidate profile</h2>
+            </div>
+            <span class="section-badge section-badge--muted">Minimal view</span>
+          </div>
+          <div id="profile-content" class="profile-card">
+            <div class="loading-line" aria-label="Loading profile"></div>
+            <div class="loading-line loading-line--short" aria-hidden="true"></div>
+          </div>
+        </section>
+
+        <section id="runs" class="runs-section" aria-labelledby="runs-title">
+          <div class="section-heading">
+            <div>
+              <p class="section-index">04 / Draft</p>
+              <h2 id="runs-title">Generate a tailored packet</h2>
+            </div>
+            <p class="section-aside">Generation is always user-triggered. Review every output before it leaves this workspace.</p>
+          </div>
+          <form id="generation-form" class="generation-card">
+            <div class="generation-copy">
+              <span class="generation-icon" aria-hidden="true">✦</span>
+              <div>
+                <h3>Use the current job description</h3>
+                <p>The engine will create an evidence-backed resume and, optionally, a cover letter.</p>
+              </div>
+            </div>
+            <label class="check-control">
+              <input id="include-cover-letter" type="checkbox" checked />
+              <span class="check-box" aria-hidden="true"></span>
+              <span>Include cover letter</span>
+            </label>
+            <button class="button button--primary button--wide" id="generate-button" type="submit">
+              <span>Start generation</span>
+              <span class="button-arrow" aria-hidden="true">↗</span>
+            </button>
+          </form>
+          <div id="jobs-content" class="jobs-content">
+            <div class="empty-state empty-state--compact">
+              <h3>No generation runs yet</h3>
+              <p>Your completed packets and active jobs will collect here.</p>
+            </div>
+          </div>
+        </section>
+
+        <footer class="app-footer">
+          <p>Evidence first. Human review always.</p>
+          <p>Local API · <span id="footer-health">waiting for health check</span></p>
+        </footer>
+      </main>
+    </div>
+  </body>
+</html>

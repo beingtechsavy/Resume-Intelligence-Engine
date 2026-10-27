@@ -59,4 +59,4 @@ The system uses a 5-layer strategy:
 
 ## Cost
 
-~$0.01–0.03 per cover letter (DeepSeek V4 Pro pricing).
+Pricing is model-dependent; check the selected OpenRouter model and account usage.
