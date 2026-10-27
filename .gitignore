@@ -15,7 +15,11 @@ motivation_data.json
 # ── Generated Outputs & Personal Docs ──────────
 # Auto-generated from your personal data — not needed
 output.tex
+resume.tex
+resume.pdf
 outputs/
+runs/
+app-smoke*.log
 Resumes/
 docs/
 
@@ -24,6 +28,14 @@ docs/
 Cover Letter Maker/*.pdf
 Cover Letter Maker/.env
 Cover Letter Maker/motivation_data.json
+
+# ── Root-generated personal artifacts ───────────
+# Real tailored outputs and master CV kept local only
+master_cv.tex
+master_CV.pdf
+cover letter.pdf
+cover_letter.tex
+retell_support_engineer_resume.tex
 
 # ── Python Cache ─────────────────────────────────
 __pycache__/
