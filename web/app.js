@@ -296,7 +296,12 @@
 
   async function onAnalyze(event) {
     event.preventDefault(); const text = elements.jobDescription.value.trim(); if (!text) { setMessage("Paste a job description before analyzing.", "info"); elements.jobDescription.focus(); return; }
-    setMessage(""); setButtonBusy(elements.analyze, true, "Reading…"); elements.report.innerHTML = '<div class="empty-state"><div class="empty-glyph" aria-hidden="true">…</div><h3>Reading the role</h3><p>Matching explicit signals to the local evidence pool.</p></div>';
+    setMessage(""); setButtonBusy(elements.analyze, true, "Reading…");
+    elements.report.replaceChildren();
+    const reading = create("div", "empty-state");
+    reading.append(create("div", "empty-glyph", "…"), create("h3", null, "Reading the role"), create("p", null, "Matching explicit signals to the local evidence pool."));
+    reading.querySelector(".empty-glyph").setAttribute("aria-hidden", "true");
+    elements.report.append(reading);
     try {
       const payload = await api("/api/analyze", { method: "POST", body: JSON.stringify({ job_description: text }) });
       const report = extractMatchReport(payload);

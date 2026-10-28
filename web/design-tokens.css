@@ -1,0 +1,148 @@
+/* ============================================================
+   Resume Intelligence Engine — Design Tokens
+   Single source of truth for every visual decision in the UI.
+   All concrete styles in styles.css reference only these tokens
+   and semantic aliases below; no raw hex/px values in rules.
+   Scale math per ui-design-system generator (modern preset,
+   8pt grid, 1.25 type ratio), tuned to this workbench's identity.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---- Accent (brand) — amber, single accent for all actions ---- */
+  --accent-800: #a86a34;
+  --accent-700: #c47c3d;
+  --accent-500: #dfa16c;   /* base: buttons, links, active nav */
+  --accent-400: #efb47d;   /* hover */
+  --accent-soft: rgba(223, 161, 108, 0.13);  /* tinted fills */
+  --accent-contrast: #111719;  /* text on accent fills */
+
+  /* ---- Ink (surface) scale — warm charcoal ---- */
+  --ink-950: #111719;   /* body background */
+  --ink-900: #171e20;
+  --ink-850: #1d2628;   /* card fill */
+  --ink-850-soft: rgba(29, 38, 40, 0.58);
+  --ink-850-strong: rgba(29, 38, 40, 0.76);
+  --ink-800: #263133;   /* recessed fill: progress track, checkbox */
+  --ink-700: #354143;
+
+  /* ---- Cream (content) scale — warm off-whites ---- */
+  --cream-100: #f7f3eb;  /* strongest text */
+  --cream-200: #e8e3d9;  /* headings on cards */
+  --cream-400: #b5b5aa;  /* secondary body */
+  --cream-500: #8d9187;  /* labels, footnotes */
+  --cream-600: #6d7472;  /* placeholders, disabled */
+  --cream-700: #596263;  /* faintest text */
+
+  /* ---- Semantic status — matched/partial/missing + offline ---- */
+  --ok-500: #7ec39c;
+  --ok-soft: rgba(126, 195, 156, 0.12);
+  --warn-500: #e3c37d;
+  --warn-soft: rgba(227, 195, 125, 0.12);
+  --warn-line: rgba(227, 195, 125, 0.35);
+  --err-500: #e58c83;
+  --err-soft: rgba(229, 140, 131, 0.08);
+  --err-line: rgba(229, 140, 131, 0.35);
+
+  /* ---- Hairlines ---- */
+  --line: rgba(235, 231, 219, 0.13);
+  --line-strong: rgba(235, 231, 219, 0.22);
+
+  /* ---- Elevation (single shadow is enough on dark) ---- */
+  --shadow-card: 0 18px 55px rgba(4, 9, 10, 0.24);
+  --shadow-focus: 0 0 0 3px var(--accent-soft);
+  --shadow-focus-ok: 0 0 0 3px var(--ok-soft);   /* status-dot ok ring */
+
+  /* ---- Typography families ---- */
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* ---- Type scale (1.25 ratio; major sizes only) ---- */
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 19px;
+  --text-h2: clamp(24px, 3vw, 33px);
+  --text-h1: clamp(42px, 5vw, 68px);
+
+  /* Line heights */
+  --leading-tight: 1.05;
+  --leading-snug: 1.3;
+  --leading-body: 1.6;
+  --leading-relaxed: 1.7;
+
+  /* Letter spacing */
+  --tracking-tight: -.05em;
+  --tracking-h2: -.035em;
+  --tracking-caps: .14em;
+
+  /* ---- Spacing scale (4pt sub-grid, 8pt base) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-section: 92px;   /* between page sections */
+  --space-top: 60px;       /* top of main content */
+
+  /* ---- Radius ---- */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-badge: 5px;
+  --radius-pill: 20px;
+  --radius-full: 50%;
+
+  /* ---- Borders ---- */
+  --border-thin: 1px;
+
+  /* ---- Control sizing (buttons/inputs) ---- */
+  --control-h: 37px;
+  --control-px: 15px;
+  --control-h-lg: 44px;
+
+  /* ---- Motion ---- */
+  --dur-fast: 150ms;
+  --dur-base: 200ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --pulse-dur: 1.4s;
+  --shimmer-dur: 1.4s;
+  --poll-interval: 1600ms;   /* referenced in app.js only for docs */
+
+  /* ---- Breakpoints (consumed by media queries) ---- */
+  --bp-narrow: 850px;
+  --bp-phone: 570px;
+
+  /* ---- Composite fill aliases (hover/panel tints, decorative grid) ---- */
+  --tint: rgba(255, 255, 255, 0.045);        /* nav hover wash */
+  --tint-soft: rgba(255, 255, 255, 0.025);   /* panel fill wash */
+  --grid-line: rgba(255, 255, 255, 0.035);   /* body grid overlay */
+  --accent-line: rgba(223, 161, 108, 0.34);  /* accent-tinted hairlines */
+  --code-text: #d7ddd5;                      /* mono preview text */
+
+  /* ---- Font weights ---- */
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  /* ---- Z-index ---- */
+  --zi-skip: 10;        /* skip link above content */
+  --zi-mobilebar: 5;    /* fixed bottom nav on phones */
+
+  /* ---- Component size overrides ---- */
+  --text-2xl-name: 24px;   /* profile name */
+  --text-2xl-icon: 16px;   /* mobile nav icons */
+
+  /* ---- Layout widths ---- */
+  --sidebar-w: 236px;
+  --content-w: 1110px;
+}
