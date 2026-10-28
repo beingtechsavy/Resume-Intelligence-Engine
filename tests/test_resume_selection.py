@@ -7,13 +7,21 @@ from rie.selection import build_curated_profile, select_resume_evidence
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROFILE = json.loads((ROOT / "data_pool.json").read_text(encoding="utf-8"))
+
+# The real data_pool.json is personal and gitignored. These tests assert on
+# real entry keys (neuronest, cogent_podcast_internship, ...) from the
+# resume_selection_index, so they run only when the private pool exists;
+# public clones skip them, and test_resume_selection_examples.py covers the
+# sanitized example pool instead.
+_POOL_PATH = ROOT / "data_pool.json"
+_PROFILE = json.loads(_POOL_PATH.read_text(encoding="utf-8")) if _POOL_PATH.exists() else None
 
 
+@unittest.skipUnless(_PROFILE is not None, "requires the private, gitignored data_pool.json")
 class ResumeSelectionTests(unittest.TestCase):
     def test_technical_jd_suppresses_podcast_internship(self):
         report = select_resume_evidence(
-            PROFILE,
+            _PROFILE,
             "Junior AI Support Specialist. Troubleshoot Python and PostgreSQL API issues, "
             "analyze transcripts, test prompts and communicate with customers.",
         )
@@ -31,7 +39,7 @@ class ResumeSelectionTests(unittest.TestCase):
 
     def test_omitted_podcast_internship_stays_out_even_for_content_jds(self):
         report = select_resume_evidence(
-            PROFILE,
+            _PROFILE,
             "Podcast content producer internship supporting episode research, guest coordination, "
             "social media promotion and analytics reporting.",
         )
@@ -45,7 +53,7 @@ class ResumeSelectionTests(unittest.TestCase):
 
     def test_specific_jd_skills_prevent_generic_android_project_leakage(self):
         report = select_resume_evidence(
-            PROFILE,
+            _PROFILE,
             "Software Engineer building Python and TypeScript web applications with "
             "PostgreSQL and REST APIs.",
         )
@@ -57,7 +65,7 @@ class ResumeSelectionTests(unittest.TestCase):
 
     def test_curated_prompt_does_not_send_raw_pool_or_podcast(self):
         curated, selection = build_curated_profile(
-            PROFILE,
+            _PROFILE,
             "Software Engineer building Python and TypeScript web applications with PostgreSQL.",
         )
         rendered = json.dumps(curated, ensure_ascii=False)
@@ -66,7 +74,7 @@ class ResumeSelectionTests(unittest.TestCase):
         self.assertEqual(selection["schema_version"], "resume-selection-2")
 
         _, prompt = build_prompt(
-            PROFILE,
+            _PROFILE,
             "Software Engineer building Python and TypeScript web applications with PostgreSQL.",
         )
         self.assertIn("SELECTED_DATA_POOL:", prompt)
@@ -77,7 +85,7 @@ class ResumeSelectionTests(unittest.TestCase):
 
     def test_owner_priorities_control_project_and_experience_selection(self):
         report = select_resume_evidence(
-            PROFILE,
+            _PROFILE,
             "Junior AI Support Specialist. Troubleshoot Python and PostgreSQL API issues, "
             "review prompts and communicate with customers.",
         )
@@ -100,7 +108,7 @@ class ResumeSelectionTests(unittest.TestCase):
         self.assertEqual(suppressed["cogent_podcast_internship"]["user_priority"], "exclude")
 
     def test_keyword_dependent_projects_require_a_direct_job_signal(self):
-        report = select_resume_evidence(PROFILE, "AI Support Specialist with prompt testing and customer communication.")
+        report = select_resume_evidence(_PROFILE, "AI Support Specialist with prompt testing and customer communication.")
         suppressed = {
             item["key"]: item
             for item in report["suppressed"]
@@ -112,7 +120,7 @@ class ResumeSelectionTests(unittest.TestCase):
 
     def test_one_page_budget_is_exposed_and_limits_selected_evidence(self):
         report = select_resume_evidence(
-            PROFILE,
+            _PROFILE,
             "Software Engineer building Python and TypeScript web applications with PostgreSQL.",
         )
         self.assertEqual(report["page_budget"]["target_pages"], 1)
