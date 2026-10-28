@@ -22,7 +22,13 @@ from rie.web.store import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROFILE_PATH = ROOT / "data_pool.json"
+# The real data_pool.json is personal and gitignored; public clones fall
+# back to the sanitized example pool. Both satisfy these tests: the
+# redaction assertions only require sensitive values to be absent.
+_PROFILE_REAL = ROOT / "data_pool.json"
+PROFILE_PATH = (
+    _PROFILE_REAL if _PROFILE_REAL.exists() else ROOT / "data_pool.example.json"
+)
 WEB_ROOT = ROOT / "web"
 
 
