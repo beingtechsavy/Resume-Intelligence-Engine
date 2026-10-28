@@ -1,6 +1,6 @@
 import unittest
 
-from ats_validator import validate_resume_ats
+from rie.ats import validate_resume_ats
 
 
 GOOD_LATEX = r"""

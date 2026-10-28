@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from cl_prompt_builder import build_cl_prompt
+from rie.prompts.cover_letter import build_cl_prompt
 
 
 ROOT = Path(__file__).resolve().parents[1]

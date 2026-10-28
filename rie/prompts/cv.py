@@ -13,9 +13,32 @@ Architecture:
                    Changes every run. Token-optimised.
 """
 
+import os
 import json
 
-from resume_selection import build_curated_profile
+from rie.selection import build_curated_profile
+
+
+def resolve_owner_identity(data_pool: dict) -> str:
+    """Return the candidate's display name from the profile (env fallback).
+
+    Generation must never silently emit a wrong identity, so this hard-fails
+    when neither source has a usable name.
+    """
+    personal = data_pool.get("personal_info")
+    name = ""
+    if isinstance(personal, dict):
+        name = str(personal.get("name") or "").strip()
+    if not name:
+        name = str(data_pool.get("profile_owner") or "").strip()
+    if not name:
+        name = os.getenv("RIE_OWNER_NAME", "").strip()
+    if not name:
+        raise ValueError(
+            "Candidate name unavailable: set personal_info.name in data_pool.json "
+            "or the RIE_OWNER_NAME environment variable."
+        )
+    return name
 
 # ---------------------------------------------------------------------------
 # RECRUITER-FIRST PROMPT CONTROL BLOCK
@@ -173,6 +196,7 @@ def build_prompt(data_pool: dict, job_description: str) -> tuple[str, str]:
     # full evidence pool.  This prevents a drafting model from choosing a
     # non-technical internship simply because it is recent or well-described.
     curated_pool, selection = build_curated_profile(data_pool, job_description)
+    owner_name = resolve_owner_identity(data_pool)
     minified_pool = json.dumps(curated_pool, separators=(",", ":"), ensure_ascii=False)
     minified_selection = json.dumps(
         {
@@ -229,7 +253,7 @@ def build_prompt(data_pool: dict, job_description: str) -> tuple[str, str]:
         "DOCUMENT BODY STRUCTURE — fill content into this skeleton:\n"
         "\\begin{document}\n"
         "  \\begin{center}\n"
-        "    {\\LARGE\\bfseries Arpan Padhi}\\\\[0.3em]\n"
+        f"    {{\\LARGE\\bfseries {owner_name}}}\\\\[0.3em]\n"
         "    \\small [email link] $|$ [linkedin link] $|$ [github link]\\\\\n"
         "    \\normalsize\\textbf{[Exact Job Title from JD]} $|$ [top 3 aligned skills]\n"
         "  \\end{center}\n"

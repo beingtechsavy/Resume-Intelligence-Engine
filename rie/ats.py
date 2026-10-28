@@ -18,7 +18,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from job_matcher import SKILL_RULES, _alias_in_text, _detected_skills, _normalize
+from rie.latex import FORBIDDEN_PACKAGES
+from rie.matching import SKILL_RULES, _alias_in_text, _detected_skills, _normalize
 
 
 STANDARD_HEADINGS = {
@@ -175,7 +176,7 @@ def validate_resume_ats(latex: str, job_description: str = "") -> dict[str, Any]
             )
         )
 
-    forbidden_packages = {"fontspec", "xunicode", "xltxtra", "unicode-math", "polyglossia"}
+    forbidden_packages = FORBIDDEN_PACKAGES
     package_hits = sorted(
         package
         for package in forbidden_packages

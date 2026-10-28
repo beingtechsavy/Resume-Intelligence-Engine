@@ -2,8 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
-from prompt_builder import build_prompt
-from resume_selection import build_curated_profile, select_resume_evidence
+from rie.prompts.cv import build_prompt
+from rie.selection import build_curated_profile, select_resume_evidence
 
 
 ROOT = Path(__file__).resolve().parents[1]

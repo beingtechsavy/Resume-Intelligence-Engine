@@ -232,7 +232,10 @@ def analyze_job(job_text: str, profile: dict[str, Any]) -> dict[str, Any]:
     # report can explain both what the JD asks for and what the resume writer is
     # allowed to use.  Import lazily to keep this module usable on its own and
     # avoid a module cycle for the prompt builders.
-    from resume_selection import select_resume_evidence
+    try:
+        from rie.selection import select_resume_evidence
+    except ImportError:  # root wrapper layout
+        from resume_selection import select_resume_evidence
 
     resume_selection = select_resume_evidence(profile, job_text)
 

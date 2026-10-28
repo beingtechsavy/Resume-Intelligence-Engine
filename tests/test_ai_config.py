@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from ai_config import DEFAULT_DEEPSEEK_MODEL, DEFAULT_OPENROUTER_BASE_URL, load_ai_config
+from rie.llm import DEFAULT_DEEPSEEK_MODEL, DEFAULT_OPENROUTER_BASE_URL, load_ai_config
 
 
 class LoadAIConfigTests(unittest.TestCase):

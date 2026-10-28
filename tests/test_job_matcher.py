@@ -1,6 +1,6 @@
 import unittest
 
-from job_matcher import analyze_job, _detected_skills
+from rie.matching import analyze_job, _detected_skills
 
 
 PROFILE = {

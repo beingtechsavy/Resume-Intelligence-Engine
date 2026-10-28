@@ -21,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from job_matcher import (
+from rie.matching import (
     SKILL_RULES,
     _alias_in_text,
     _detected_role_families,

@@ -16,7 +16,7 @@ Architecture (mirrors prompt_builder.py from Resume Maker):
 
 import json
 
-from resume_selection import build_curated_profile
+from rie.selection import build_curated_profile
 
 # ---------------------------------------------------------------------------
 # COVER LETTER PROMPT CONTROL BLOCK
