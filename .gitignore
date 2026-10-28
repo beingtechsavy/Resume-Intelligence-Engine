@@ -25,9 +25,6 @@ docs/
 
 # ── Application-Specific PDFs ───────────────────
 # Any actual university/job application documents
-Cover Letter Maker/*.pdf
-Cover Letter Maker/.env
-Cover Letter Maker/motivation_data.json
 
 # ── Root-generated personal artifacts ───────────
 # Real tailored outputs and master CV kept local only

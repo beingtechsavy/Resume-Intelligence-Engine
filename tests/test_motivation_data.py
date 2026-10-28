@@ -30,7 +30,7 @@ class MotivationDataTests(unittest.TestCase):
         self.assertIn("for_project_roles", data["role_adaptation"])
 
     def test_prompt_includes_user_voice_and_current_location(self):
-        pool = {"profile_owner": "Arpan Padhi"}
+        pool = json.loads((ROOT / "data_pool.json").read_text(encoding="utf-8"))
         motivation = json.loads(
             (ROOT / "motivation_data.json").read_text(encoding="utf-8")
         )

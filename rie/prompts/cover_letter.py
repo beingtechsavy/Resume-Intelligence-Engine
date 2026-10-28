@@ -15,8 +15,49 @@ Architecture (mirrors prompt_builder.py from Resume Maker):
 """
 
 import json
+import os
 
 from rie.selection import build_curated_profile
+
+
+def resolve_owner_contact(data_pool: dict) -> tuple[str, str, str, str]:
+    """Return (name, location, email, linkedin) from the profile (env fallback).
+
+    Generation must never silently emit a wrong identity, so this hard-fails
+    when the name is unavailable. Contact fields degrade gracefully: a missing
+    email/linkedin/location is omitted from the letter header rather than
+    fabricated.
+    """
+    personal = data_pool.get("personal_info")
+    if not isinstance(personal, dict):
+        personal = {}
+    profile_owner = str(data_pool.get("profile_owner") or "").strip()
+
+    def _from(*keys: str, env_key: str | None = None) -> str:
+        value = ""
+        for key in keys:
+            value = str(personal.get(key) or "").strip()
+            if value:
+                break
+        if not value and env_key:
+            value = os.getenv(env_key, "").strip()
+        return value
+
+    name = _from("name", "full_name", env_key="RIE_OWNER_NAME")
+
+    if not name:
+        name = str(os.getenv("RIE_OWNER_NAME") or "").strip() or profile_owner
+
+    if not name:
+        raise ValueError(
+            "Candidate name unavailable: set personal_info.name or profile_owner "
+            "in data_pool.json, or the RIE_OWNER_NAME environment variable."
+        )
+
+    location = _from("location", "city", env_key="RIE_OWNER_LOCATION")
+    email = _from("email", env_key="RIE_OWNER_EMAIL")
+    linkedin = _from("linkedin", "linkedin_url", env_key="RIE_OWNER_LINKEDIN")
+    return name, location, email, linkedin
 
 # ---------------------------------------------------------------------------
 # COVER LETTER PROMPT CONTROL BLOCK
@@ -233,6 +274,20 @@ def build_cl_prompt(
     # Use the same deterministic evidence slice as resume generation so the
     # cover letter cannot revive an unrelated internship from the raw pool.
     curated_pool, selection = build_curated_profile(data_pool, job_description)
+    owner_name, owner_location, owner_email, owner_linkedin = resolve_owner_contact(data_pool)
+
+    contact_parts: list[str] = []
+    if owner_email:
+        contact_parts.append(f"\\href{{mailto:{owner_email}}}{{{owner_email}}}")
+    if owner_linkedin:
+        linkedin_text = owner_linkedin.replace("https://", "").replace("http://", "")
+        contact_parts.append(f"\\href{{{owner_linkedin}}}{{{linkedin_text}}}")
+
+    header_lines = (f"  \\textbf{{{owner_name}}}\\\\")
+    if owner_location:
+        header_lines += f"\n  {owner_location}\\\\"
+    if contact_parts:
+        header_lines += "\n  " + " $|$ ".join(contact_parts)
     minified_pool = json.dumps(curated_pool, separators=(",", ":"), ensure_ascii=False)
     minified_selection = json.dumps(
         {
@@ -292,10 +347,7 @@ def build_cl_prompt(
         "DOCUMENT BODY STRUCTURE — fill content into this skeleton exactly:\n"
         "\\begin{document}\n"
         "\\begin{flushleft}\n"
-        "  \\textbf{Arpan Padhi}\\\\\n"
-         "  Bengaluru, India\\\\\n"
-        "  \\href{mailto:arpanpadhi2004@gmail.com}{arpanpadhi2004@gmail.com}"
-        " $|$ \\href{https://linkedin.com/in/arpanpadhi}{linkedin.com/in/arpanpadhi}\n"
+        f"{header_lines}\n"
         "\\end{flushleft}\n"
         "\\vspace{0.8em}\n"
         "\\today\n"
@@ -309,7 +361,7 @@ def build_cl_prompt(
         "\\vspace{0.8em}\n"
         "[Closing line, e.g.: Best regards,]\n\n"
         "\\vspace{2.5em}\n"
-        "Arpan Padhi\n"
+        f"{owner_name}\n"
         "\\end{document}\n\n"
 
         "HARD RULES:\n"

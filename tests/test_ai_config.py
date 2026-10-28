@@ -16,7 +16,7 @@ class LoadAIConfigTests(unittest.TestCase):
                     [
                         "OPENROUTER_API_KEY=test-key",
                         "OPENROUTER_MODEL=test/provider-model",
-                        "OPENROUTER_BASE_URL=https://router.example/v1",
+                        "OPENROUTER_BASE_URL=https://openrouter.ai/api/v1",
                         "OPENROUTER_HTTP_REFERER=https://resume.example",
                         "OPENROUTER_APP_TITLE=Resume Test",
                     ]
@@ -29,7 +29,8 @@ class LoadAIConfigTests(unittest.TestCase):
 
         self.assertEqual(config.api_key, "test-key")
         self.assertEqual(config.model, "test/provider-model")
-        self.assertEqual(config.base_url, "https://router.example/v1")
+        self.assertEqual(config.base_url, "https://openrouter.ai/api/v1")
+        self.assertEqual(config.provider, "openrouter")
         self.assertEqual(
             config.default_headers,
             {
@@ -153,6 +154,92 @@ class LoadAIConfigTests(unittest.TestCase):
             {"prompt": 0.05, "completion": 0.30},
         )
         self.assertEqual(config.reasoning_options, {"effort": "minimal"})
+
+
+class ProviderAgnosticTests(unittest.TestCase):
+    def test_rie_keys_override_openrouter_keys(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "OPENROUTER_API_KEY=legacy-key\n"
+                "OPENROUTER_MODEL=legacy/model\n"
+                "RIE_API_KEY=neutral-key\n"
+                "RIE_MODEL=neutral/model\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_ai_config(env_file)
+
+        self.assertEqual(config.api_key, "neutral-key")
+        self.assertEqual(config.model, "neutral/model")
+
+    def test_falls_back_to_openrouter_keys_when_rie_absent(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "OPENROUTER_API_KEY=legacy-key\nOPENROUTER_MODEL=legacy/model\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_ai_config(env_file)
+
+        self.assertEqual(config.api_key, "legacy-key")
+        self.assertEqual(config.model, "legacy/model")
+
+    def test_non_openrouter_endpoint_gets_plain_request(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "RIE_API_KEY=test-key\n"
+                f"RIE_MODEL={DEFAULT_DEEPSEEK_MODEL}\n"
+                "RIE_BASE_URL=https://api.example-vendor.com/v1\n"
+                "OPENROUTER_HTTP_REFERER=https://resume.example\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_ai_config(env_file)
+
+        self.assertEqual(config.provider, "openai_compatible")
+        self.assertEqual(config.default_headers, {})
+        self.assertEqual(config.reasoning_options, {})
+        self.assertEqual(config.provider_options, {})
+        self.assertEqual(config.request_kwargs(), {})
+
+    def test_explicit_rie_provider_forces_openrouter_extras(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "RIE_API_KEY=test-key\n"
+                f"RIE_MODEL={DEFAULT_DEEPSEEK_MODEL}\n"
+                "RIE_BASE_URL=https://gateway.example/v1\n"
+                "RIE_PROVIDER=openrouter\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                config = load_ai_config(env_file)
+
+        self.assertEqual(config.provider, "openrouter")
+        self.assertEqual(config.request_kwargs()["extra_body"]["reasoning"], {"effort": "none"})
+
+    def test_invalid_rie_provider_value_fails_clearly(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            env_file = Path(temp_dir) / ".env"
+            env_file.write_text(
+                "RIE_API_KEY=test-key\n"
+                "RIE_MODEL=test/model\n"
+                "RIE_PROVIDER=azure\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                with self.assertRaises(SystemExit) as error:
+                    load_ai_config(env_file)
+
+        self.assertIn("RIE_PROVIDER", str(error.exception))
 
 
 if __name__ == "__main__":

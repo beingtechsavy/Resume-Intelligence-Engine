@@ -8,15 +8,16 @@ No generic templates. No manual rewriting. Just structured personal data + a lan
 
 ## How It Works
 
-The engine uses a **Profile Context Block (PCB)** architecture:
+The engine uses a **Prompt Control Block (PCB)** architecture:
 
 1. **You define yourself once** — in `data_pool.json`, you describe your skills, experience, projects, and career positioning in a structured format.
 2. **You paste a job description** — the engine reads it at runtime.
-3. **A prompt is constructed** — `prompt_builder.py` assembles your profile data + the JD into a precise instruction for the LLM.
-4. **The LLM generates a resume** — targeted to the exact role, using only facts from your data pool.
-5. **LaTeX → PDF** — the output is clean LaTeX that compiles to a professional PDF.
+3. **A local selector ranks your evidence** — `rie.matching` and `rie.selection` analyze the JD, classify your evidence, and build a curated, budgeted slice.
+4. **A prompt is constructed** — `rie.prompts.cv` assembles the curated profile + selection + JD into a precise instruction for the LLM.
+5. **The LLM generates a resume** — targeted to the exact role, using only facts from your data pool.
+6. **LaTeX → PDF** — the output is clean LaTeX that compiles to a professional PDF.
 
-The cover letter variant (`cl_prompt_builder.py`) adds `motivation_data.json` — a second data source for personal narrative, tone, and origin stories. This keeps factual data and personal voice cleanly separated.
+The cover letter variant (`rie.prompts.cover_letter`) adds `motivation_data.json` — a second data source for personal narrative, tone, and origin stories. This keeps factual data and personal voice cleanly separated.
 
 ---
 
@@ -24,22 +25,39 @@ The cover letter variant (`cl_prompt_builder.py`) adds `motivation_data.json` �
 
 ```
 .
-├── resume_generator.py        # Main orchestrator — run this for resumes
-├── generate.py                # Core generation logic
-├── ai_config.py               # Shared local OpenRouter configuration
-├── job_matcher.py             # Local explainable JD-to-evidence triage
-├── prompt_builder.py          # PCB + resume prompt construction
-├── cl_prompt_builder.py       # PCB + cover letter prompt construction
-├── Cover Letter Maker/
-│   └── cover_letter_generator.py  # Cover letter variant
-├── data_pool.json             # YOUR candidate data (not in repo — use example)
-├── data_pool.example.json     # Template — copy and fill this
-├── motivation_data.json       # YOUR personal narrative (not in repo — use example)
-├── motivation_data.example.json   # Template — copy and fill this
-├── .env                       # YOUR API key (not in repo — use example)
-├── .env.example               # Template — copy and fill this
-└── requirements.txt           # Python dependencies
+├── generate.py                  # CLI: parallel resume + cover letter (thin wrapper)
+├── resume_generator.py          # CLI: resume-only generation (thin wrapper)
+├── app.py                       # CLI: local web workbench (thin wrapper)
+├── rie/
+│   ├── data.py                  # Profile/motivation loading, request-body parsing
+│   ├── matching.py              # Local explainable JD-to-evidence triage
+│   ├── selection.py             # Evidence ranking + one-page budgeting
+│   ├── ats.py                   # Local parser-safety validator
+│   ├── llm.py                   # Provider-agnostic model configuration
+│   ├── latex.py                 # Shared LaTeX helpers + PDF compilation
+│   ├── prompts/
+│   │   ├── cv.py                # PCB + resume prompt construction
+│   │   └── cover_letter.py      # PCB + cover letter prompt construction
+│   ├── generate_pipeline.py     # Parallel CV + CL generation pipeline
+│   ├── generate_resume.py       # Standalone resume generation
+│   ├── generate_cover_letter.py # Standalone cover letter generation
+│   └── web/
+│       ├── store.py             # Bounded thread-safe job registry
+│       ├── runner.py            # Generation worker + artifact handling
+│       └── server.py            # stdlib HTTP server + API routes
+├── data_pool.json               # YOUR candidate data (not in repo — use example)
+├── data_pool.example.json       # Template — copy and fill this
+├── motivation_data.json         # YOUR personal narrative (not in repo — use example)
+├── motivation_data.example.json # Template — copy and fill this
+├── .env                         # YOUR API key (not in repo — use example)
+├── .env.example                 # Template — copy and fill this
+├── tests/                       # Test suite (pytest or unittest)
+└── requirements.txt             # Python dependencies
 ```
+
+---
+
+## Setup
 
 ---
 
@@ -92,7 +110,7 @@ Edit `motivation_data.json` with your personal narrative, origin stories, and to
 Analyze a saved job-description text file before making an AI generation call:
 
 ```bash
-python job_matcher.py --jd-file path/to/job-description.txt --output match-report.json
+python -m rie.matching --jd-file path/to/job-description.txt --output match-report.json
 ```
 
 The report identifies role-family signals, explicit skills, evidence status,
@@ -108,7 +126,7 @@ Validate a generated LaTeX resume without uploading private profile data to a
 third-party scanner:
 
 ```bash
-python ats_validator.py --resume output.tex --jd-file path/to/job-description.txt
+python -m rie.ats --resume output.tex --jd-file path/to/job-description.txt
 ```
 
 The validator checks text-safe structure, standard headings, one-column layout,
@@ -138,15 +156,15 @@ python generate.py
 ```
 
 `resume_generator.py` remains the standalone resume-only path. Both paths use
-the shared OpenRouter model configuration. The recommended DeepSeek setup is:
+the shared provider configuration. The recommended DeepSeek setup is:
 
 ```env
-OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash-1017
-OPENROUTER_PROVIDER_SORT=throughput
-OPENROUTER_PROVIDER_ALLOW_FALLBACKS=true
-OPENROUTER_PROVIDER_MAX_PROMPT_PRICE=0.10
-OPENROUTER_PROVIDER_MAX_COMPLETION_PRICE=0.60
-OPENROUTER_REASONING_EFFORT=none
+RIE_MODEL=deepseek/deepseek-v4.1-flash-1017
+RIE_PROVIDER_SORT=throughput
+RIE_PROVIDER_ALLOW_FALLBACKS=true
+RIE_PROVIDER_MAX_PROMPT_PRICE=0.10
+RIE_PROVIDER_MAX_COMPLETION_PRICE=0.60
+RIE_REASONING_EFFORT=none
 ```
 
 The provider policy asks OpenRouter for a high-throughput endpoint under the
@@ -162,9 +180,11 @@ onto a second page.
 ### Cover Letter Generator
 
 ```bash
-cd "Cover Letter Maker"
-python cover_letter_generator.py
+python -m rie.generate_cover_letter
 ```
+
+Or use `python generate.py` to produce the resume and cover letter together
+from one job description (they share the same evidence selection).
 
 ### Local web workbench
 
@@ -214,17 +234,26 @@ The `motivation_data.json` is even more opinionated: it's a structure for your *
 
 ## Provider and model
 
-The local generators use OpenRouter's OpenAI-compatible API. This keeps the
-workflow local while allowing the selected model to be changed without changing
-the generation code. The actual model and current pricing are controlled by
-`OPENROUTER_MODEL` and the OpenRouter account/catalog, not hard-coded in this
-repository.
+The generators speak to any OpenAI-compatible endpoint. Settings use neutral
+`RIE_*` environment keys; the historical `OPENROUTER_*` keys are still honored
+as fallbacks, so an existing `.env` keeps working unchanged.
 
 ```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENROUTER_MODEL=deepseek/deepseek-v4.1-flash-1017
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+RIE_API_KEY=your_api_key_here
+RIE_MODEL=deepseek/deepseek-v4.1-flash-1017
+RIE_BASE_URL=https://openrouter.ai/api/v1
 ```
+
+`RIE_PROVIDER` (`openrouter` | `openai_compatible`) controls whether
+OpenRouter-specific features — provider routing (`extra_body.provider`),
+reasoning effort, and attribution headers — are sent. It is auto-detected from
+the base URL host: endpoints on `openrouter.ai` get the full OpenRouter
+treatment, everything else receives a plain request. Set `RIE_PROVIDER=openrouter`
+explicitly only when routing through a non-openrouter.ai gateway that still
+expects OpenRouter fields.
+
+The actual model and current pricing are controlled by `RIE_MODEL` and the
+provider's account/catalog, not hard-coded in this repository.
 
 ---
 
@@ -232,5 +261,5 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
 ```
 python-dotenv
-openai        # OpenRouter exposes an OpenAI-compatible API
+openai        # OpenAI-compatible API access (OpenRouter or any other provider)
 ```

@@ -1,4 +1,16 @@
-"""Shared OpenRouter configuration for the local resume tools."""
+"""Provider-agnostic LLM configuration for the Resume Intelligence Engine.
+
+Settings come from the local environment (.env) using neutral ``RIE_*`` keys.
+The historical ``OPENROUTER_*`` keys remain fully supported as the fallback in
+each pair, so an existing .env keeps working unchanged.
+
+``RIE_PROVIDER`` (``openrouter`` | ``openai_compatible``) gates every
+OpenRouter-specific request extra: ``extra_body.provider`` routing,
+``extra_body.reasoning`` and the ``HTTP-Referer`` / ``X-OpenRouter-Title``
+headers. Vanilla OpenAI-compatible endpoints receiving those fields can 4xx,
+so non-OpenRouter configurations get a plain request. When unset, the provider
+is auto-detected from the resolved base_url host.
+"""
 
 from dataclasses import dataclass
 import os
@@ -13,6 +25,34 @@ DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_DEEPSEEK_MODEL = "deepseek/deepseek-v4.1-flash-1017"
 _PROVIDER_SORTS = {"price", "throughput", "latency"}
 
+# Neutral key configures first; legacy key is the fallback.
+_ENV_PAIRS = {
+    "model": ("RIE_MODEL", "OPENROUTER_MODEL"),
+    "api_key": ("RIE_API_KEY", "OPENROUTER_API_KEY"),
+    "base_url": ("RIE_BASE_URL", "OPENROUTER_BASE_URL"),
+    "provider_sort": ("RIE_PROVIDER_SORT", "OPENROUTER_PROVIDER_SORT"),
+    "provider_allow_fallbacks": (
+        "RIE_PROVIDER_ALLOW_FALLBACKS",
+        "OPENROUTER_PROVIDER_ALLOW_FALLBACKS",
+    ),
+    "provider_order": ("RIE_PROVIDER_ORDER", "OPENROUTER_PROVIDER_ORDER"),
+    "provider_max_prompt_price": (
+        "RIE_PROVIDER_MAX_PROMPT_PRICE",
+        "OPENROUTER_PROVIDER_MAX_PROMPT_PRICE",
+    ),
+    "provider_max_completion_price": (
+        "RIE_PROVIDER_MAX_COMPLETION_PRICE",
+        "OPENROUTER_PROVIDER_MAX_COMPLETION_PRICE",
+    ),
+    "reasoning_effort": ("RIE_REASONING_EFFORT", "OPENROUTER_REASONING_EFFORT"),
+    "http_referer": ("RIE_HTTP_REFERER", "OPENROUTER_HTTP_REFERER"),
+    "app_title": ("RIE_APP_TITLE", "OPENROUTER_APP_TITLE"),
+}
+
+_OPENROUTER_HOSTS = ("openrouter.ai",)
+PROVIDER_OPENROUTER = "openrouter"
+PROVIDER_OPENAI_COMPATIBLE = "openai_compatible"
+
 
 @dataclass(frozen=True)
 class AIConfig:
@@ -21,12 +61,13 @@ class AIConfig:
     api_key: str
     model: str
     base_url: str
+    provider: str
     default_headers: dict[str, str]
     provider_options: dict[str, Any]
     reasoning_options: dict[str, Any]
 
     def client(self) -> OpenAI:
-        """Create an OpenAI-compatible client pointed at OpenRouter."""
+        """Create an OpenAI-compatible client at the configured endpoint."""
         return OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
@@ -34,13 +75,29 @@ class AIConfig:
         )
 
     def request_kwargs(self) -> dict[str, Any]:
-        """Return OpenRouter-specific request fields for the selected model."""
+        """Return provider-specific request fields for the selected model.
+
+        OpenRouter routes and reasoning extras are only sent when the provider
+        is OpenRouter; other OpenAI-compatible endpoints receive a plain body.
+        """
+        if self.provider != PROVIDER_OPENROUTER:
+            return {}
         extra_body: dict[str, Any] = {}
         if self.provider_options:
             extra_body["provider"] = self.provider_options
         if self.reasoning_options:
             extra_body["reasoning"] = self.reasoning_options
         return {"extra_body": extra_body} if extra_body else {}
+
+
+def _env_setting(name: str) -> str:
+    """Resolve a setting from its RIE_*/legacy pair, first-wins."""
+    primary, legacy = _ENV_PAIRS[name]
+    for key in (primary, legacy):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _parse_bool(value: str, default: bool | None = None) -> bool | None:
@@ -52,63 +109,88 @@ def _parse_bool(value: str, default: bool | None = None) -> bool | None:
     if normalized in {"0", "false", "no", "off"}:
         return False
     raise SystemExit(
-        "\n[ERROR] Invalid boolean OpenRouter setting: "
+        "\n[ERROR] Invalid boolean provider setting: "
         f"'{value}'. Use true/false.\n"
     )
 
 
-def _parse_price(name: str) -> float | None:
-    raw = os.getenv(name, "").strip()
+def _parse_price(raw: str, label: str) -> float | None:
     if not raw:
         return None
     try:
         value = float(raw)
     except ValueError:
-        raise SystemExit(f"\n[ERROR] {name} must be a number in USD per million tokens.\n") from None
+        raise SystemExit(
+            f"\n[ERROR] {label} must be a number in USD per million tokens.\n"
+        ) from None
     if value < 0:
-        raise SystemExit(f"\n[ERROR] {name} must not be negative.\n")
+        raise SystemExit(f"\n[ERROR] {label} must not be negative.\n")
     return value
 
 
-def _provider_options(model: str) -> dict[str, Any]:
+def _resolve_provider(base_url: str) -> str:
+    """Detect the provider flavour from RIE_PROVIDER or the base_url host."""
+    explicit = os.getenv("RIE_PROVIDER", "").strip().casefold()
+    if explicit:
+        if explicit not in {PROVIDER_OPENROUTER, PROVIDER_OPENAI_COMPATIBLE}:
+            raise SystemExit(
+                "\n[ERROR] RIE_PROVIDER must be one of: "
+                f"{PROVIDER_OPENROUTER}, {PROVIDER_OPENAI_COMPATIBLE}.\n"
+            )
+        return explicit
+
+    host = base_url.split("//", 1)[-1].split("/", 1)[0].casefold()
+    if host in _OPENROUTER_HOSTS:
+        return PROVIDER_OPENROUTER
+    return PROVIDER_OPENAI_COMPATIBLE
+
+
+def _provider_options(model: str, is_openrouter: bool) -> dict[str, Any]:
     """Build a conservative provider policy without hard-pinning one host."""
     options: dict[str, Any] = {}
 
-    # The DeepSeek model is used for two concurrent document calls. Prefer
-    # throughput while keeping the route below the current balanced price band;
-    # OpenRouter can fall back if the preferred endpoint is unavailable.
-    if model == DEFAULT_DEEPSEEK_MODEL:
-        options.update(
-            {
-                "sort": "throughput",
-                "allow_fallbacks": True,
-                "max_price": {"prompt": 0.10, "completion": 0.60},
-            }
-        )
+    if is_openrouter:
+        # The DeepSeek model is used for two concurrent document calls. Prefer
+        # throughput while keeping the route below the current balanced price
+        # band; OpenRouter can fall back if the preferred endpoint is down.
+        if model == DEFAULT_DEEPSEEK_MODEL:
+            options.update(
+                {
+                    "sort": "throughput",
+                    "allow_fallbacks": True,
+                    "max_price": {"prompt": 0.10, "completion": 0.60},
+                }
+            )
 
-    sort = os.getenv("OPENROUTER_PROVIDER_SORT", "").strip().casefold()
+    sort = _env_setting("provider_sort").casefold()
     if sort:
         if sort not in _PROVIDER_SORTS:
             raise SystemExit(
-                "\n[ERROR] OPENROUTER_PROVIDER_SORT must be one of: "
+                "\n[ERROR] Provider sort setting must be one of: "
                 f"{', '.join(sorted(_PROVIDER_SORTS))}.\n"
             )
         options["sort"] = sort
 
-    allow_fallbacks = _parse_bool(os.getenv("OPENROUTER_PROVIDER_ALLOW_FALLBACKS", ""))
+    allow_fallbacks = _parse_bool(_env_setting("provider_allow_fallbacks"))
     if allow_fallbacks is not None:
         options["allow_fallbacks"] = allow_fallbacks
 
     order = [
         provider.strip()
-        for provider in os.getenv("OPENROUTER_PROVIDER_ORDER", "").split(",")
+        for provider in _env_setting("provider_order").split(",")
         if provider.strip()
     ]
     if order:
         options["order"] = order
 
-    prompt_limit = _parse_price("OPENROUTER_PROVIDER_MAX_PROMPT_PRICE")
-    completion_limit = _parse_price("OPENROUTER_PROVIDER_MAX_COMPLETION_PRICE")
+    labels = _ENV_PAIRS["provider_max_prompt_price"]
+    prompt_limit = _parse_price(
+        _env_setting("provider_max_prompt_price"), labels[0]
+    )
+    completion_limit = _parse_price(
+        _env_setting("provider_max_completion_price"),
+        _ENV_PAIRS["provider_max_completion_price"][0],
+    )
     if prompt_limit is not None or completion_limit is not None:
         max_price = dict(options.get("max_price", {}))
         if prompt_limit is not None:
@@ -120,9 +202,9 @@ def _provider_options(model: str) -> dict[str, Any]:
     return options
 
 
-def _reasoning_options(model: str) -> dict[str, Any]:
-    effort = os.getenv("OPENROUTER_REASONING_EFFORT", "").strip().casefold()
-    if not effort and model == DEFAULT_DEEPSEEK_MODEL:
+def _reasoning_options(model: str, is_openrouter: bool) -> dict[str, Any]:
+    effort = _env_setting("reasoning_effort").casefold()
+    if not effort and is_openrouter and model == DEFAULT_DEEPSEEK_MODEL:
         effort = "none"
     return {"effort": effort} if effort else {}
 
@@ -131,7 +213,7 @@ def load_ai_config(
     env_file: Path,
     fallback_env_file: Path | None = None,
 ) -> AIConfig:
-    """Load and validate OpenRouter settings from a local .env file."""
+    """Load and validate provider settings from a local .env file."""
     used_fallback = False
     if fallback_env_file and fallback_env_file.exists() and fallback_env_file != env_file:
         load_dotenv(fallback_env_file)
@@ -141,37 +223,40 @@ def load_ai_config(
     if used_fallback and not env_file.exists():
         print(f"[INFO] Using provider settings from {fallback_env_file}")
 
-    api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
-    model = os.getenv("OPENROUTER_MODEL", "").strip()
-    base_url = os.getenv(
-        "OPENROUTER_BASE_URL", DEFAULT_OPENROUTER_BASE_URL
-    ).strip()
+    api_key = _env_setting("api_key")
+    model = _env_setting("model")
+    base_url = _env_setting("base_url") or DEFAULT_OPENROUTER_BASE_URL
 
     missing = []
     if not api_key:
-        missing.append("OPENROUTER_API_KEY")
+        missing.append("RIE_API_KEY (or OPENROUTER_API_KEY)")
     if not model:
-        missing.append("OPENROUTER_MODEL")
+        missing.append("RIE_MODEL (or OPENROUTER_MODEL)")
     if missing:
         raise SystemExit(
-            "\n[ERROR] Missing OpenRouter configuration: "
+            "\n[ERROR] Missing provider configuration: "
             + ", ".join(missing)
             + f"\n       Set them in '{env_file}'.\n"
         )
 
+    provider = _resolve_provider(base_url)
+    is_openrouter = provider == PROVIDER_OPENROUTER
+
     default_headers: dict[str, str] = {}
-    http_referer = os.getenv("OPENROUTER_HTTP_REFERER", "").strip()
-    app_title = os.getenv("OPENROUTER_APP_TITLE", "").strip()
-    if http_referer:
-        default_headers["HTTP-Referer"] = http_referer
-    if app_title:
-        default_headers["X-OpenRouter-Title"] = app_title
+    if is_openrouter:
+        http_referer = _env_setting("http_referer")
+        app_title = _env_setting("app_title")
+        if http_referer:
+            default_headers["HTTP-Referer"] = http_referer
+        if app_title:
+            default_headers["X-OpenRouter-Title"] = app_title
 
     return AIConfig(
         api_key=api_key,
         model=model,
         base_url=base_url,
+        provider=provider,
         default_headers=default_headers,
-        provider_options=_provider_options(model),
-        reasoning_options=_reasoning_options(model),
+        provider_options=_provider_options(model, is_openrouter),
+        reasoning_options=_reasoning_options(model, is_openrouter),
     )
