@@ -7,7 +7,7 @@ GOOD_LATEX = r"""
 \documentclass{article}
 \usepackage{hyperref}
 \begin{document}
-Arpan Padhi\\ arpan@example.com
+Sample Person\\ arpan@example.com
 \section{Experience}
 \begin{itemize}
 \item Built Python and PostgreSQL services with REST APIs.
