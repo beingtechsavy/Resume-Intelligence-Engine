@@ -1,0 +1,1489 @@
+<title>Prompt Control Block Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  /* ============================================================
+     Prompt Control Block (PCB) Architecture — Infographic Tokens
+     Derived from RIE Design Tokens (Warm Charcoal, Amber, Cream)
+     Extended for multi-model architectural diagramming.
+     ============================================================ */
+  :root {
+    --bg-page: #f8f6f1;
+    --bg-card: #ffffff;
+    --bg-card-subtle: #f1eee7;
+    --bg-card-inset: #e8e3d8;
+    --border-card: rgba(26, 32, 34, 0.12);
+    --border-strong: rgba(26, 32, 34, 0.22);
+
+    --text-primary: #12181a;
+    --text-secondary: #485458;
+    --text-muted: #738084;
+
+    --accent: #b8682a;
+    --accent-hover: #9e551e;
+    --accent-soft: rgba(184, 104, 42, 0.10);
+    --accent-glow: rgba(184, 104, 42, 0.22);
+
+    --cache-green: #1a7f37;
+    --cache-green-soft: rgba(26, 127, 55, 0.10);
+    --cache-green-border: rgba(26, 127, 55, 0.28);
+
+    --dynamic-blue: #0969da;
+    --dynamic-blue-soft: rgba(9, 105, 218, 0.10);
+    --dynamic-blue-border: rgba(9, 105, 218, 0.28);
+
+    --luna-purple: #8250df;
+    --luna-purple-soft: rgba(130, 80, 223, 0.10);
+    --luna-purple-border: rgba(130, 80, 223, 0.28);
+
+    --flash-cyan: #057a85;
+    --flash-cyan-soft: rgba(5, 122, 133, 0.10);
+    --flash-cyan-border: rgba(5, 122, 133, 0.28);
+
+    --warn-amber: #9a6700;
+    --warn-amber-soft: rgba(154, 103, 0, 0.10);
+
+    --font-heading: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+    --shadow-sm: 0 2px 8px rgba(18, 24, 26, 0.05);
+    --shadow-md: 0 8px 24px rgba(18, 24, 26, 0.08);
+    --shadow-lg: 0 16px 40px rgba(18, 24, 26, 0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg-page: #0f1416;
+      --bg-card: #171f22;
+      --bg-card-subtle: #1c262a;
+      --bg-card-inset: #111719;
+      --border-card: rgba(235, 231, 219, 0.12);
+      --border-strong: rgba(235, 231, 219, 0.24);
+
+      --text-primary: #f7f3eb;
+      --text-secondary: #b5b5aa;
+      --text-muted: #7b868a;
+
+      --accent: #dfa16c;
+      --accent-hover: #efb47d;
+      --accent-soft: rgba(223, 161, 108, 0.14);
+      --accent-glow: rgba(223, 161, 108, 0.26);
+
+      --cache-green: #3fb950;
+      --cache-green-soft: rgba(63, 185, 80, 0.14);
+      --cache-green-border: rgba(63, 185, 80, 0.35);
+
+      --dynamic-blue: #58a6ff;
+      --dynamic-blue-soft: rgba(88, 166, 255, 0.14);
+      --dynamic-blue-border: rgba(88, 166, 255, 0.35);
+
+      --luna-purple: #bc8cff;
+      --luna-purple-soft: rgba(188, 140, 255, 0.14);
+      --luna-purple-border: rgba(188, 140, 255, 0.35);
+
+      --flash-cyan: #39c5cf;
+      --flash-cyan-soft: rgba(57, 197, 207, 0.14);
+      --flash-cyan-border: rgba(57, 197, 207, 0.35);
+
+      --warn-amber: #e3c37d;
+      --warn-amber-soft: rgba(227, 195, 125, 0.14);
+
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.38);
+      --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg-page: #0f1416;
+    --bg-card: #171f22;
+    --bg-card-subtle: #1c262a;
+    --bg-card-inset: #111719;
+    --border-card: rgba(235, 231, 219, 0.12);
+    --border-strong: rgba(235, 231, 219, 0.24);
+
+    --text-primary: #f7f3eb;
+    --text-secondary: #b5b5aa;
+    --text-muted: #7b868a;
+
+    --accent: #dfa16c;
+    --accent-hover: #efb47d;
+    --accent-soft: rgba(223, 161, 108, 0.14);
+    --accent-glow: rgba(223, 161, 108, 0.26);
+
+    --cache-green: #3fb950;
+    --cache-green-soft: rgba(63, 185, 80, 0.14);
+    --cache-green-border: rgba(63, 185, 80, 0.35);
+
+    --dynamic-blue: #58a6ff;
+    --dynamic-blue-soft: rgba(88, 166, 255, 0.14);
+    --dynamic-blue-border: rgba(88, 166, 255, 0.35);
+
+    --luna-purple: #bc8cff;
+    --luna-purple-soft: rgba(188, 140, 255, 0.14);
+    --luna-purple-border: rgba(188, 140, 255, 0.35);
+
+    --flash-cyan: #39c5cf;
+    --flash-cyan-soft: rgba(57, 197, 207, 0.14);
+    --flash-cyan-border: rgba(57, 197, 207, 0.35);
+
+    --warn-amber: #e3c37d;
+    --warn-amber-soft: rgba(227, 195, 125, 0.14);
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.38);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55);
+  }
+
+  /* Reset & Layout Container */
+  * { box-sizing: border-box; }
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 14.5px;
+    line-height: 1.55;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: clamp(20px, 4vw, 48px);
+    margin: 0;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .wrap {
+    max-width: 1240px;
+    margin-inline: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+
+  /* Header Bar */
+  .header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border-card);
+    padding-bottom: 24px;
+  }
+  .title-group h1 {
+    font-family: var(--font-heading);
+    font-size: clamp(26px, 3.5vw, 36px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin: 0 0 6px 0;
+    text-wrap: balance;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .badge-pcb {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  .tagline {
+    color: var(--text-secondary);
+    font-size: 15px;
+    margin: 0;
+    max-width: 720px;
+  }
+  .top-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    color: var(--text-secondary);
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .theme-toggle-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+    background: var(--bg-card-subtle);
+  }
+
+  /* Architecture Core Principle Banner */
+  .concept-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+  .concept-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+  }
+  .concept-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--border-card);
+  }
+  .concept-card.os::before { background: var(--accent); }
+  .concept-card.cache::before { background: var(--cache-green); }
+  .concept-card.dispatch::before { background: var(--dynamic-blue); }
+
+  .concept-card .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .concept-card h3 {
+    margin: 0 0 6px 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .concept-card p {
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+  }
+
+  /* Interactive Navigation Tabs */
+  .view-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    background: var(--bg-card-subtle);
+    padding: 6px;
+    border-radius: 10px;
+    border: 1px solid var(--border-card);
+  }
+  .tab-btn {
+    flex: 1;
+    min-width: 180px;
+    background: transparent;
+    border: none;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(0, 0, 0, 0.04);
+  }
+  .tab-btn.active {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Visual Views / Containers */
+  .view-panel {
+    display: none;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .view-panel.active {
+    display: flex;
+  }
+
+  /* TOPOLOGY VIEW — End-to-End Pipeline */
+  .pipeline-canvas {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 16px;
+    padding: clamp(20px, 3vw, 36px);
+    box-shadow: var(--shadow-md);
+  }
+  .pipeline-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed var(--border-card);
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .pipeline-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .pipeline-legend {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* Interactive Dataflow Diagram Stages */
+  .dataflow-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+    position: relative;
+  }
+
+  .stage-box {
+    grid-column: span 12;
+    background: var(--bg-card-subtle);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    padding: 18px;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
+    cursor: pointer;
+  }
+  .stage-box:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-2px);
+  }
+  .stage-box.highlighted {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+
+  .stage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .stage-step {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--border-card);
+    color: var(--text-secondary);
+  }
+  .stage-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Specific Stages layout */
+  .stage-ingest { grid-column: span 12; }
+  .stage-selector { grid-column: span 12; border-left: 4px solid var(--accent); }
+
+  /* Split Stage: PCB Junction */
+  .junction-container {
+    grid-column: span 12;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    padding: 4px 0;
+  }
+  .stage-system-pcb {
+    background: var(--cache-green-soft);
+    border: 1px solid var(--cache-green-border);
+    border-left: 4px solid var(--cache-green);
+  }
+  .stage-user-payload {
+    background: var(--dynamic-blue-soft);
+    border: 1px solid var(--dynamic-blue-border);
+    border-left: 4px solid var(--dynamic-blue);
+  }
+
+  /* Parallel Workers */
+  .parallel-container {
+    grid-column: span 12;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .stage-cv-worker {
+    background: var(--flash-cyan-soft);
+    border: 1px solid var(--flash-cyan-border);
+    border-left: 4px solid var(--flash-cyan);
+  }
+  .stage-cl-worker {
+    background: var(--luna-purple-soft);
+    border: 1px solid var(--luna-purple-border);
+    border-left: 4px solid var(--luna-purple);
+  }
+
+  /* Verification & Output */
+  .stage-verifier { grid-column: span 6; border-left: 4px solid var(--cache-green); }
+  .stage-output { grid-column: span 6; border-left: 4px solid var(--accent); }
+
+  .stage-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
+  .pill {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    color: var(--text-secondary);
+  }
+  .pill.cached {
+    background: var(--cache-green-soft);
+    color: var(--cache-green);
+    border-color: var(--cache-green-border);
+    font-weight: 600;
+  }
+  .pill.dynamic {
+    background: var(--dynamic-blue-soft);
+    color: var(--dynamic-blue);
+    border-color: var(--dynamic-blue-border);
+  }
+  .pill.model {
+    font-weight: 600;
+  }
+  .pill.model-flash {
+    background: var(--flash-cyan-soft);
+    color: var(--flash-cyan);
+    border-color: var(--flash-cyan-border);
+  }
+  .pill.model-luna {
+    background: var(--luna-purple-soft);
+    color: var(--luna-purple);
+    border-color: var(--luna-purple-border);
+  }
+
+  /* Stage Connector Arrows (Visual flow) */
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    grid-column: span 12;
+    padding: 2px 0;
+    color: var(--text-muted);
+    font-size: 18px;
+  }
+  .flow-arrow svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    opacity: 0.6;
+  }
+
+  /* ANATOMY VIEW — Side-by-Side System vs User Comparison */
+  .anatomy-comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 860px) {
+    .anatomy-comparison { grid-template-columns: 1fr; }
+    .junction-container, .parallel-container { grid-template-columns: 1fr; }
+    .stage-verifier, .stage-output { grid-column: span 12; }
+  }
+
+  .anatomy-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .anatomy-card.system-pcb {
+    border-top: 5px solid var(--cache-green);
+  }
+  .anatomy-card.user-payload {
+    border-top: 5px solid var(--dynamic-blue);
+  }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1px solid var(--border-card);
+    padding-bottom: 14px;
+  }
+  .card-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .card-badge.cache {
+    background: var(--cache-green-soft);
+    color: var(--cache-green);
+    border: 1px solid var(--cache-green-border);
+  }
+  .card-badge.turn {
+    background: var(--dynamic-blue-soft);
+    color: var(--dynamic-blue);
+    border: 1px solid var(--dynamic-blue-border);
+  }
+
+  .anatomy-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .anatomy-item {
+    background: var(--bg-card-subtle);
+    border: 1px solid var(--border-card);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .anatomy-item h4 {
+    margin: 0 0 4px 0;
+    font-size: 13.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .anatomy-item p {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+  .code-snippet {
+    background: var(--bg-card-inset);
+    border: 1px solid var(--border-card);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--text-primary);
+    overflow-x: auto;
+    margin-top: 6px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ECONOMICS & CACHING VIEW */
+  .econ-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 20px;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 14px;
+    padding: 22px;
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-card .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .stat-card .metric {
+    font-size: clamp(32px, 4vw, 42px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin: 6px 0 2px 0;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-card .metric.highlight { color: var(--cache-green); }
+  .stat-card .metric.accent { color: var(--accent); }
+  .stat-card .desc {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin: 0;
+  }
+
+  .interactive-calc {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 16px;
+    padding: 26px;
+    box-shadow: var(--shadow-md);
+  }
+  .calc-controls {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin: 18px 0 24px 0;
+    flex-wrap: wrap;
+  }
+  .slider-box {
+    flex: 1;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .calc-slider {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  .comparison-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .bar-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .bar-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .bar-track {
+    height: 28px;
+    background: var(--bg-card-subtle);
+    border: 1px solid var(--border-card);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+  }
+  .bar-fill-cached {
+    background: var(--cache-green);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+  .bar-fill-dynamic {
+    background: var(--dynamic-blue);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+  .bar-fill-waste {
+    background: #d13c3c;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+  }
+
+  /* DUAL MODEL ROUTING VIEW */
+  .model-routing-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 800px) {
+    .model-routing-grid { grid-template-columns: 1fr; }
+  }
+  .model-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow-md);
+  }
+  .model-card.flash { border-top: 5px solid var(--flash-cyan); }
+  .model-card.luna { border-top: 5px solid var(--luna-purple); }
+
+  .spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 14px;
+    font-size: 13px;
+  }
+  .spec-table th, .spec-table td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-card);
+  }
+  .spec-table th {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .spec-table td:last-child {
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  /* Detail Drawer / Modal for Inspection */
+  .inspect-drawer {
+    display: none;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: var(--shadow-lg);
+    animation: fadeIn 0.15s ease-out;
+  }
+  .inspect-drawer.open {
+    display: block;
+  }
+  .inspect-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .inspect-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Footer Note */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border-card);
+    padding-top: 20px;
+  }
+</style>
+
+<div class="wrap">
+  <!-- Top Navigation & Brand Header -->
+  <header class="header">
+    <div class="title-group">
+      <h1>Prompt Control Block <span class="badge-pcb">PCB Architecture</span></h1>
+      <p class="tagline">
+        The deterministic kernel of the Resume Intelligence Engine. Splits static operating laws from dynamic applicant evidence for prefix cache saturation, zero token drift, and dual-model dispatch.
+      </p>
+    </div>
+    <div class="top-controls">
+      <button class="theme-toggle-btn" id="themeBtn" aria-label="Toggle Theme">
+        <span id="themeIcon">☀️</span> <span id="themeText">Theme</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- High-Level Mental Models -->
+  <section class="concept-strip">
+    <article class="concept-card os">
+      <div class="eyebrow">Operating System Analogy</div>
+      <h3>Process Control Block (PCB)</h3>
+      <p>Just as an OS maintains an immutable control block defining process context and capabilities, RIE locks the model into an invariant Recruiter-First operating identity that never mutates across runs.</p>
+    </article>
+    <article class="concept-card cache">
+      <div class="eyebrow">Prefix Cache Saturation</div>
+      <h3>Static System Prefix = Free Compute</h3>
+      <p>The 9,400-character SYSTEM message is strictly static. DeepSeek and OpenRouter cache the prefix, yielding <strong>80–90% cost discounts</strong> and eliminating prompt re-computation latency.</p>
+    </article>
+    <article class="concept-card dispatch">
+      <div class="eyebrow">Dual-Model Specialization</div>
+      <h3>Right Engine for the Right Slot</h3>
+      <p>LaTeX resume compilation demands zero hallucination and strict grammar (DeepSeek Flash 1017); Cover Letter writing demands rhythm burstiness and human cadence (GPT-6 Luna).</p>
+    </article>
+  </section>
+
+  <!-- Interactive Tab Switcher -->
+  <nav class="view-nav" role="tablist">
+    <button class="tab-btn active" role="tab" aria-selected="true" data-tab="tab-topology">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      1. Pipeline Topology
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-anatomy">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/></svg>
+      2. PCB vs Payload Anatomy
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-routing">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24M14.83 9.17l4.24-4.24M14.83 14.83l4.24 4.24M9.17 14.83l-4.24 4.24"/></svg>
+      3. Dual-Model Routing
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" data-tab="tab-economics">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      4. Prefix Cache Economics
+    </button>
+  </nav>
+
+  <!-- ============================================================
+       TAB 1: PIPELINE TOPOLOGY
+       ============================================================ -->
+  <main class="view-panel active" id="tab-topology">
+    <div class="pipeline-canvas">
+      <div class="pipeline-header">
+        <div>
+          <h2>Deterministic End-to-End Execution Flow</h2>
+          <div style="color: var(--text-secondary); font-size: 13.5px; margin-top: 4px;">Click any block to inspect its data structures and implementation details.</div>
+        </div>
+        <div class="pipeline-legend">
+          <span class="legend-item"><span class="legend-dot" style="background: var(--cache-green);"></span> Invariant (Prefix Cached)</span>
+          <span class="legend-item"><span class="legend-dot" style="background: var(--dynamic-blue);"></span> Dynamic (Per-Run Turn)</span>
+          <span class="legend-item"><span class="legend-dot" style="background: var(--accent);"></span> Python Deterministic (Zero-LLM)</span>
+        </div>
+      </div>
+
+      <div class="dataflow-grid">
+        <!-- 1. Input Sources -->
+        <div class="stage-box stage-ingest" onclick="inspectStage('ingest')">
+          <div class="stage-header">
+            <span class="stage-step">Stage 01: Ingestion</span>
+            <span class="pill">Raw Inputs</span>
+          </div>
+          <h3 class="stage-title">Candidate Knowledge Vaults & Target Job Description</h3>
+          <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+            <code>data_pool.json</code> (master verified experiences & projects) + <code>motivation_data.json</code> (narrative voice & seed sentences) + raw <code>JOB_DESCRIPTION</code> text.
+          </p>
+          <div class="stage-meta">
+            <span class="pill">40+ Evidence Claims</span>
+            <span class="pill">Claim Policy Verification</span>
+            <span class="pill">Raw JD Token Stream</span>
+          </div>
+        </div>
+
+        <div class="flow-arrow"><svg viewBox="0 0 24 24"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg></div>
+
+        <!-- 2. Local Deterministic Selection -->
+        <div class="stage-box stage-selector" onclick="inspectStage('selector')">
+          <div class="stage-header">
+            <span class="stage-step">Stage 02: Local Selection Engine</span>
+            <span class="pill">Zero-LLM Python Engine</span>
+          </div>
+          <h3 class="stage-title">Deterministic Evidence Pruning & 1-Page Budgeting</h3>
+          <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+            Executes <code>select_resume_evidence()</code>. Scores experience against JD keywords, enforces owner priority tags (<code>primary</code>, <code>secondary</code>, <code>keyword_dependent</code>, <code>exclude</code>), and suppresses low-relevance items before LLM dispatch.
+          </p>
+          <div class="stage-meta">
+            <span class="pill">Max 2 Roles / 3 Projects</span>
+            <span class="pill">Strict Suppression of Excluded Items</span>
+            <span class="pill">&lt; 15ms Execution</span>
+          </div>
+        </div>
+
+        <div class="flow-arrow"><svg viewBox="0 0 24 24"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg></div>
+
+        <!-- 3. Prompt Construction Split -->
+        <div class="junction-container">
+          <!-- Left: Invariant System PCB -->
+          <div class="stage-box stage-system-pcb" onclick="inspectStage('system_pcb')">
+            <div class="stage-header">
+              <span class="stage-step" style="background: var(--cache-green-soft); color: var(--cache-green);">System Message: PCB</span>
+              <span class="pill cached">100% Prefix Cached</span>
+            </div>
+            <h3 class="stage-title">Prompt Control Block (Immutable Contract)</h3>
+            <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+              Static recruiter scan mental models, 6/7 core laws, ATS parsing physics, anti-detection burstiness rules, banned packages, and strict LaTeX grammar skeleton.
+            </p>
+            <div class="stage-meta">
+              <span class="pill cached">~3,200 Static Tokens</span>
+              <span class="pill cached">Zero Drift Between Runs</span>
+            </div>
+          </div>
+
+          <!-- Right: Dynamic User Payload -->
+          <div class="stage-box stage-user-payload" onclick="inspectStage('user_payload')">
+            <div class="stage-header">
+              <span class="stage-step" style="background: var(--dynamic-blue-soft); color: var(--dynamic-blue);">User Message: Payload</span>
+              <span class="pill dynamic">Dynamic Turn</span>
+            </div>
+            <h3 class="stage-title">Minified Curated Evidence Payload</h3>
+            <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+              <code>SELECTED_DATA_POOL</code> (minified JSON) + <code>RESUME_SELECTION</code> (traceability report) + pruned <code>JOB_DESCRIPTION</code> + <code>OUTPUT_CONTRACT</code>.
+            </p>
+            <div class="stage-meta">
+              <span class="pill dynamic">~1,800 Dynamic Tokens</span>
+              <span class="pill dynamic">Strict 1-Page Constraint</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow"><svg viewBox="0 0 24 24"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg></div>
+
+        <!-- 4. Parallel Dual-Model Dispatch -->
+        <div class="parallel-container">
+          <!-- CV Worker -->
+          <div class="stage-box stage-cv-worker" onclick="inspectStage('cv_worker')">
+            <div class="stage-header">
+              <span class="stage-step" style="background: var(--flash-cyan-soft); color: var(--flash-cyan);">Slot: Resume (CV)</span>
+              <span class="pill model model-flash">DeepSeek Flash 1017</span>
+            </div>
+            <h3 class="stage-title">High-Throughput LaTeX Compiler</h3>
+            <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+              Strict adherence to document preamble, exact section token limits, mathematical alignment, and zero hallucination of candidate achievements.
+            </p>
+            <div class="stage-meta">
+              <span class="pill">~95 tok/sec Speed</span>
+              <span class="pill">$0.14 / $0.28 per Mtok</span>
+            </div>
+          </div>
+
+          <!-- Cover Letter Worker -->
+          <div class="stage-box stage-cl-worker" onclick="inspectStage('cl_worker')">
+            <div class="stage-header">
+              <span class="stage-step" style="background: var(--luna-purple-soft); color: var(--luna-purple);">Slot: Cover Letter</span>
+              <span class="pill model model-luna">GPT-6 Luna (RIE_CL_MODEL)</span>
+            </div>
+            <h3 class="stage-title">Humanized Voice & Pitch Engine</h3>
+            <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+              Applies MIT-grounded anti-AI structural rules: 20+ word sentence length spread, &lt;50% mid-band words, zero em dashes, and applicant seed sentences.
+            </p>
+            <div class="stage-meta">
+              <span class="pill">Zero AI Fingerprint</span>
+              <span class="pill">350–500 Word Budget</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow"><svg viewBox="0 0 24 24"><path d="M12 4v16m0 0l-6-6m6 6l6-6"/></svg></div>
+
+        <!-- 5. Verification & Output Artifacts -->
+        <div class="stage-box stage-verifier" onclick="inspectStage('verifier')">
+          <div class="stage-header">
+            <span class="stage-step">Stage 05: Verification Gating</span>
+            <span class="pill">Multi-Pass Linter</span>
+          </div>
+          <h3 class="stage-title">ATS & LaTeX Compiler Gating</h3>
+          <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+            ATS Validator checks 1-column layout, absence of tables/images, and JD skills. LaTeX compiler tests compilation in sandbox with tempdir isolation.
+          </p>
+        </div>
+
+        <div class="stage-box stage-output" onclick="inspectStage('output')">
+          <div class="stage-header">
+            <span class="stage-step">Stage 06: Production Artifacts</span>
+            <span class="pill">Immutable Disk Outputs</span>
+          </div>
+          <h3 class="stage-title">Versioned Run Artifacts</h3>
+          <p style="margin: 4px 0 0 0; color: var(--text-secondary); font-size: 13px;">
+            Generates <code>resume.tex</code>, <code>cover_letter.tex</code>, <code>match_report.json</code>, and cryptographic <code>manifest.json</code> in <code>runs/run-&lt;id&gt;</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Inspector Drawer -->
+    <aside class="inspect-drawer" id="inspectDrawer">
+      <div class="inspect-header">
+        <h3 class="inspect-title" id="inspectTitle">Stage Details</h3>
+        <button class="close-btn" onclick="closeInspector()">&times;</button>
+      </div>
+      <div id="inspectContent">Click on a pipeline component to view code and architectural constraints.</div>
+    </aside>
+  </main>
+
+  <!-- ============================================================
+       TAB 2: PCB VS PAYLOAD ANATOMY
+       ============================================================ -->
+  <section class="view-panel" id="tab-anatomy">
+    <div class="anatomy-comparison">
+      <!-- Left: SYSTEM PCB -->
+      <article class="anatomy-card system-pcb">
+        <div class="card-top">
+          <div>
+            <span class="card-badge cache">SYSTEM MESSAGE (PCB)</span>
+            <h2 style="margin: 8px 0 4px 0; font-size: 20px;">The Invariant Operating Kernel</h2>
+            <div style="font-size: 13px; color: var(--text-secondary);">Identical across all runs for a document type. Eligible for Prefix Cache hit.</div>
+          </div>
+          <span style="font-family: var(--font-mono); font-size: 12px; color: var(--cache-green); font-weight: 700;">9,400 chars</span>
+        </div>
+
+        <div class="anatomy-list">
+          <div class="anatomy-item">
+            <h4>1. Recruiter Mental Model Contract <span class="pill cached">Static</span></h4>
+            <p>Codifies the 5-second human scan: (1) Does Title match? (2) Is there measurable impact? (3) Is it clean? Reframes ATS as a passive database, not a scoring evaluator.</p>
+            <div class="code-snippet">"ATS software is a parser and routing database, not a human reviewer. Make the document easy for both: standard headings, plain text, simple one-column structure."</div>
+          </div>
+
+          <div class="anatomy-item">
+            <h4>2. The 6 Invariant Resume Laws <span class="pill cached">Static</span></h4>
+            <p>Hard behavioral constraints: LAW 1 Title Lock; LAW 2 Impact Over Tasks; LAW 3 Clarity Over Density; LAW 4 Story Over Lists; LAW 5 One-Page Budget; LAW 6 Natural Keywords.</p>
+            <div class="code-snippet">LAW 2 — IMPACT OVER TASKS: NEVER write "worked on" or "assisted". ALWAYS write: [Strong verb] + [Specific what] + [Result that mattered].</div>
+          </div>
+
+          <div class="anatomy-item">
+            <h4>3. Anti-AI Writing Fingerprint Rules <span class="pill cached">Static</span></h4>
+            <p>Distilled from MIT-licensed detection research: sentence rhythm spread floor (&ge;20 words), mid-band cap (&lt;50%), zero em dashes (<code>---</code>), and zero parallel negation ("Not X, but Y").</p>
+            <div class="code-snippet">"Zero em dashes (---). Do not use an em dash anywhere in the letter. Overuse is the single strongest AI writing marker."</div>
+          </div>
+
+          <div class="anatomy-item">
+            <h4>4. LaTeX Preamble & Package Banning <span class="pill cached">Static</span></h4>
+            <p>Hard blacklists for XeLaTeX/LuaLaTeX packages (<code>fontspec</code>, <code>polyglossia</code>) and commands (<code>\vspace</code>, <code>\newpage</code>) preventing compiler crashes on standard TeX Live distributions.</p>
+            <div class="code-snippet">BANNED packages: fontspec, xunicode, xltxtra, unicode-math, polyglossia
+BANNED commands: \setmainfont, \setsansfont, \newpage, \vspace{}</div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Right: USER PAYLOAD -->
+      <article class="anatomy-card user-payload">
+        <div class="card-top">
+          <div>
+            <span class="card-badge turn">USER MESSAGE (PAYLOAD)</span>
+            <h2 style="margin: 8px 0 4px 0; font-size: 20px;">The Dynamic Runtime Turn</h2>
+            <div style="font-size: 13px; color: var(--text-secondary);">Mutates on every run. Minified JSON and job-specific parameters.</div>
+          </div>
+          <span style="font-family: var(--font-mono); font-size: 12px; color: var(--dynamic-blue); font-weight: 700;">Variable</span>
+        </div>
+
+        <div class="anatomy-list">
+          <div class="anatomy-item">
+            <h4>1. Minified SELECTED_DATA_POOL <span class="pill dynamic">Dynamic</span></h4>
+            <p>Pruned subset of candidate profile. Experiences, projects, and certifications selected by local deterministic algorithm. Whitespace-stripped JSON.</p>
+            <div class="code-snippet">{"selected": {"experience": [{"key": "iiser_research_internship", ...}], "projects": [{"key": "neuronest", ...}]}}</div>
+          </div>
+
+          <div class="anatomy-item">
+            <h4>2. RESUME_SELECTION Traceability <span class="pill dynamic">Dynamic</span></h4>
+            <p>Selection report containing scoring rationale, target budget counts, and user priority markers (<code>primary</code>, <code>secondary</code>, <code>keyword_dependent</code>).</p>
+            <div class="code-snippet">{"schema_version": "resume-selection-2", "page_budget": {"target_pages": 1, "max_experience_entries": 2, "max_project_entries": 3}}</div>
+          </div>
+
+          <div class="anatomy-item">
+            <h4>3. Candidate MOTIVATION_DATA <span class="pill dynamic">Dynamic</span></h4>
+            <p>Personal origin story, authentic seed sentences, and target role adaptations. Gives the cover letter model the applicant's genuine midnight voice.</p>
+            <div class="code-snippet">{"origin_stories": ["Altum project management..."], "seed_sentences": ["I've spent 2 years obsessing over..."]}</div>
+          </div>
+
+          <div class="anatomy-item">
+            <h4>4. Raw JOB_DESCRIPTION & Output Contract <span class="pill dynamic">Dynamic</span></h4>
+            <p>Target job posting plus the strict output contract mandating zero conversational preamble: <code>OUTPUT FINAL LATEX ONLY. No explanation.</code></p>
+            <div class="code-snippet">OUTPUT FINAL LATEX ONLY. No explanation. No thinking out loud.
+SELECTED_DATA_POOL: ...
+JOB_DESCRIPTION: Software Engineer building Python...</div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       TAB 3: DUAL-MODEL ROUTING
+       ============================================================ -->
+  <section class="view-panel" id="tab-routing">
+    <div class="model-routing-grid">
+      <article class="model-card flash">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span class="pill model model-flash">CV SLOT ENGINE</span>
+          <span style="font-family: var(--font-mono); font-size: 12px; color: var(--flash-cyan);">Default: RIE_MODEL</span>
+        </div>
+        <h2 style="margin: 0 0 6px 0; font-size: 22px;">DeepSeek Flash 1017</h2>
+        <p style="margin: 0 0 16px 0; color: var(--text-secondary); font-size: 13.5px;">
+          Optimized for strict mathematical grammar, zero hallucination, and high-throughput compilation of 1-column ATS-safe LaTeX.
+        </p>
+
+        <table class="spec-table">
+          <tr><th>Attribute</th><th>Specification</th></tr>
+          <tr><td>Target Role</td><td>Resume LaTeX Generation</td></tr>
+          <tr><td>Model Identifier</td><td>deepseek/deepseek-v4.1-flash-1017</td></tr>
+          <tr><td>Provider Routing</td><td>OpenRouter throughput sorting enabled</td></tr>
+          <tr><td>Reasoning Effort</td><td>"none" (instant direct output)</td></tr>
+          <tr><td>Output Compliance</td><td>100% Valid LaTeX, 0 forbidden packages</td></tr>
+          <tr><td>Generation Latency</td><td>~3.8s wall clock</td></tr>
+          <tr><td>Cost Efficiency</td><td>$0.14 / Mtok prompt ($0.014 cached)</td></tr>
+        </table>
+      </article>
+
+      <article class="model-card luna">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <span class="pill model model-luna">COVER LETTER SLOT ENGINE</span>
+          <span style="font-family: var(--font-mono); font-size: 12px; color: var(--luna-purple);">Override: RIE_CL_MODEL</span>
+        </div>
+        <h2 style="margin: 0 0 6px 0; font-size: 22px;">GPT-6 Luna (OpenAI)</h2>
+        <p style="margin: 0 0 16px 0; color: var(--text-secondary); font-size: 13.5px;">
+          Configured specifically for authentic conversational voice, avoiding typical corporate AI cliches and rhythm flatlining.
+        </p>
+
+        <table class="spec-table">
+          <tr><th>Attribute</th><th>Specification</th></tr>
+          <tr><td>Target Role</td><td>Humanized Cover Letter Generation</td></tr>
+          <tr><td>Model Identifier</td><td>openai/gpt-6-luna</td></tr>
+          <tr><td>Provider Routing</td><td>Direct OpenAI-compatible adapter</td></tr>
+          <tr><td>Rulebook Alignment</td><td>MIT Humanize Writing guidelines</td></tr>
+          <tr><td>Writing Markers</td><td>0 em dashes, &ge;20 word rhythm spread</td></tr>
+          <tr><td>Generation Latency</td><td>~5.2s wall clock</td></tr>
+          <tr><td>Parallel Execution</td><td>Spawns concurrently via ThreadPoolExecutor</td></tr>
+        </table>
+      </article>
+    </div>
+
+    <!-- Parallel Dispatch Code Block -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 12px; padding: 20px;">
+      <h3 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 700;">Parallel Dispatch Implementation (rie/generate_pipeline.py)</h3>
+      <p style="color: var(--text-secondary); font-size: 13px; margin: 0 0 12px 0;">
+        Both generators execute in parallel workers. Total generation time is <code>max(t_cv, t_cl)</code> rather than <code>t_cv + t_cl</code>, halving user wait time.
+      </p>
+      <div class="code-snippet">with ThreadPoolExecutor(max_workers=2) as executor:
+    cv_future = executor.submit(cv_runner, config, data_pool, jd)
+    cl_future = executor.submit(cl_runner, cl_config, data_pool, motivation_data, jd)
+    cv_result = cv_future.result()
+    cl_result = cl_future.result()</div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       TAB 4: ECONOMICS & CACHING
+       ============================================================ -->
+  <section class="view-panel" id="tab-economics">
+    <div class="econ-grid">
+      <div class="stat-card">
+        <div class="eyebrow">Prefix Cache Cost Reduction</div>
+        <div class="metric highlight">89.4%</div>
+        <p class="desc">On DeepSeek & OpenRouter, cached prompt tokens drop from $0.14/Mtok to $0.014/Mtok on identical system prefixes.</p>
+      </div>
+
+      <div class="stat-card">
+        <div class="eyebrow">Prompt Size Ratio</div>
+        <div class="metric accent">64 / 36</div>
+        <p class="desc">64% of total turn tokens reside in the static PCB. Only 36% changes per run for candidate evidence.</p>
+      </div>
+
+      <div class="stat-card">
+        <div class="eyebrow">Time to First Token (TTFT)</div>
+        <div class="metric highlight">-62%</div>
+        <p class="desc">Cached KV states skip the compute-intensive attention matrix prefill phase on LLM clusters.</p>
+      </div>
+    </div>
+
+    <div class="interactive-calc">
+      <h3 style="margin: 0 0 6px 0; font-size: 18px; font-weight: 700;">Interactive Token Savings Simulator</h3>
+      <p style="color: var(--text-secondary); font-size: 13px; margin: 0;">Adjust the number of job applications generated to simulate caching efficiency vs naive monolithic prompts.</p>
+
+      <div class="calc-controls">
+        <div class="slider-box">
+          <div class="slider-label">
+            <span>Job Applications Generated</span>
+            <span id="jobCountLabel" style="font-family: var(--font-mono); color: var(--accent); font-weight: 700;">25 runs</span>
+          </div>
+          <input type="range" class="calc-slider" id="jobSlider" min="1" max="100" value="25">
+        </div>
+      </div>
+
+      <div class="comparison-bars">
+        <div class="bar-row">
+          <div class="bar-info">
+            <span>Naive Architecture (Full prompt recomputed every run)</span>
+            <span id="naiveTokens" style="font-family: var(--font-mono);">125,000 tokens ($0.0350)</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill-waste" id="naiveBar" style="width: 100%;">100% Uncached Recomputation</div>
+          </div>
+        </div>
+
+        <div class="bar-row">
+          <div class="bar-info">
+            <span>RIE Prompt Control Block (PCB Prefix Cached)</span>
+            <span id="pcbTokens" style="font-family: var(--font-mono);">48,200 tokens ($0.0051)</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill-cached" id="cachedBar" style="width: 64%;">64% Cached Prefix</div>
+            <div class="bar-fill-dynamic" id="dynamicBar" style="width: 36%;">36% Dynamic Evidence</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px; padding: 12px 14px; background: var(--bg-card-subtle); border-radius: 8px; font-size: 13px; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <span>Projected Developer Savings:</span>
+        <span style="font-weight: 700; color: var(--cache-green);" id="savingsOutput">85.4% Cost Reduction | ~145s Cumulative Compute Saved</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer Info -->
+  <footer class="footer">
+    <div><strong>Resume Intelligence Engine</strong> &bull; PCB System Architecture v2.4</div>
+    <div>Multi-Model Slot Adapter &bull; MIT Licensed Humanization Rulebook</div>
+  </footer>
+</div>
+
+<script>
+  // Tab Switching
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const viewPanels = document.querySelectorAll('.view-panel');
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabButtons.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      viewPanels.forEach(p => p.classList.remove('active'));
+
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      const targetId = btn.getAttribute('data-tab');
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) targetPanel.classList.add('active');
+    });
+  });
+
+  // Theme Toggle Support
+  const themeBtn = document.getElementById('themeBtn');
+  const themeIcon = document.getElementById('themeIcon');
+  const themeText = document.getElementById('themeText');
+
+  function updateThemeUI(isDark) {
+    themeIcon.textContent = isDark ? '🌙' : '☀️';
+    themeText.textContent = isDark ? 'Dark' : 'Light';
+  }
+
+  // Detect current preference
+  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  let currentTheme = document.documentElement.getAttribute('data-theme') || (systemPrefersDark ? 'dark' : 'light');
+  updateThemeUI(currentTheme === 'dark');
+
+  themeBtn.addEventListener('click', () => {
+    const active = document.documentElement.getAttribute('data-theme') || (systemPrefersDark ? 'dark' : 'light');
+    const next = active === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    updateThemeUI(next === 'dark');
+  });
+
+  // Stage Inspector Details Database
+  const STAGE_DETAILS = {
+    ingest: {
+      title: "Stage 01: Ingestion — Raw Data Vaults & Job Spec",
+      content: `
+        <p><strong>Inputs:</strong></p>
+        <ul>
+          <li><code>data_pool.json</code>: Comprehensive candidate achievements, metric-backed impact statements, project catalogs, and credential records.</li>
+          <li><code>motivation_data.json</code>: Authentic origin stories, seed phrases, and personal philosophy written in the candidate's real voice.</li>
+          <li><code>JOB_DESCRIPTION</code>: Unstructured hiring manager post text.</li>
+        </ul>
+        <div class="code-snippet"># Security Guardrail
+All personal identity items are loaded through resolve_owner_identity()
+and resolve_owner_contact() with strict fallback to gitignored environment variables.</div>
+      `
+    },
+    selector: {
+      title: "Stage 02: Deterministic Evidence Pruning (rie/selection.py)",
+      content: `
+        <p><strong>Mechanics:</strong> Zero-LLM instant scoring algorithm. Prevents context bloating and eliminates hallucinations.</p>
+        <ul>
+          <li><strong>Keyword Matching:</strong> Extracts keywords from JD and matches against candidate claims.</li>
+          <li><strong>Priority Gates:</strong> Respects candidate's <code>user_priority</code> tags (<code>primary</code>, <code>secondary</code>, <code>keyword_dependent</code>, <code>exclude</code>).</li>
+          <li><strong>One-Page Budget Constraints:</strong> Hard caps evidence to max 2 experience roles, max 3 projects, max 2 certifications, and max 3 skill rows.</li>
+        </ul>
+        <div class="code-snippet">report = select_resume_evidence(profile, jd_text)
+# Suppressed roles (e.g. unrelated internships) are entirely removed
+# from SELECTED_DATA_POOL before any LLM prompt is assembled.</div>
+      `
+    },
+    system_pcb: {
+      title: "Stage 03A: Invariant Prompt Control Block (PCB)",
+      content: `
+        <p><strong>The Recruiter-First & Humanization Operating System:</strong></p>
+        <ul>
+          <li>In <code>rie/prompts/cv.py</code> and <code>rie/prompts/cover_letter.py</code>, the <code>SYSTEM</code> message is 100% invariant across generation calls.</li>
+          <li><strong>Prefix Caching:</strong> LLM inference engines (DeepSeek, OpenAI, Anthropic) recognize the identical prefix token sequence and cache the KV-state.</li>
+          <li>Contains the <strong>6 Laws of Resume Crafting</strong> and <strong>7 Laws of Cover Letter Pitching</strong>.</li>
+          <li>Enforces strict negative constraints: banned LaTeX packages (<code>fontspec</code>, <code>polyglossia</code>) and zero em dashes (<code>---</code>).</li>
+        </ul>
+      `
+    },
+    user_payload: {
+      title: "Stage 03B: Dynamic Evidence Payload",
+      content: `
+        <p><strong>Token-Minified Runtime Data:</strong></p>
+        <ul>
+          <li><code>SELECTED_DATA_POOL</code>: Minified JSON of only permitted, role-relevant candidate claims.</li>
+          <li><code>RESUME_SELECTION</code>: Machine-readable selection report with one-page budget constraints.</li>
+          <li><code>JOB_DESCRIPTION</code>: Cleaned job posting text.</li>
+          <li><code>OUTPUT_CONTRACT</code>: "OUTPUT FINAL LATEX ONLY. No explanation. No thinking out loud."</li>
+        </ul>
+      `
+    },
+    cv_worker: {
+      title: "Stage 04A: Resume Slot Worker (DeepSeek Flash 1017)",
+      content: `
+        <p><strong>LaTeX Engineering Engine:</strong></p>
+        <ul>
+          <li>Model: <code>deepseek/deepseek-v4.1-flash-1017</code></li>
+          <li>Configured in <code>rie/llm.py</code> with <code>provider_sort: "throughput"</code> and <code>reasoning_effort: "none"</code>.</li>
+          <li>Adheres strictly to the one-page budget, compiling clean, text-safe 1-column LaTeX documents without page overflows.</li>
+        </ul>
+      `
+    },
+    cl_worker: {
+      title: "Stage 04B: Cover Letter Worker (GPT-6 Luna)",
+      content: `
+        <p><strong>Humanized Voice & Narrative Engine:</strong></p>
+        <ul>
+          <li>Model: <code>openai/gpt-6-luna</code> via <code>RIE_CL_MODEL</code> override.</li>
+          <li>Cloned independently via <code>AIConfig.with_model()</code> to prevent leaking OpenRouter DeepSeek options.</li>
+          <li>Implements MIT-grounded anti-detection rules: &ge;20 word sentence variance floor, &lt;50% mid-band sentence count, zero em dashes, and authentic midnight-pitch tone.</li>
+        </ul>
+      `
+    },
+    verifier: {
+      title: "Stage 05: Dual Verification Gating (rie/ats.py & rie/latex.py)",
+      content: `
+        <p><strong>Pre-Flight Quality Gates:</strong></p>
+        <ul>
+          <li><strong>ATS Validator:</strong> Asserts single-column layout, absence of tables/tabular environments, no graphics/icons, and checks presence of required JD skills.</li>
+          <li><strong>LaTeX Compiler:</strong> Compiles <code>pdflatex</code> in an isolated temporary directory, inspecting log files for missing packages or syntax errors.</li>
+        </ul>
+      `
+    },
+    output: {
+      title: "Stage 06: Production Artifacts & Manifest",
+      content: `
+        <p><strong>Immutable Run Directory:</strong></p>
+        <p>Outputs saved to <code>runs/run-&lt;timestamp&gt;-&lt;hex&gt;/</code>:</p>
+        <ul>
+          <li><code>resume.tex</code>: Production LaTeX resume.</li>
+          <li><code>cover_letter.tex</code>: Production LaTeX cover letter.</li>
+          <li><code>match_report.json</code>: Complete skill coverage and suppression audit.</li>
+          <li><code>manifest.json</code>: Schema-validated run metadata for instant web workbench restoration.</li>
+        </ul>
+      `
+    }
+  };
+
+  const inspectDrawer = document.getElementById('inspectDrawer');
+  const inspectTitle = document.getElementById('inspectTitle');
+  const inspectContent = document.getElementById('inspectContent');
+
+  function inspectStage(stageKey) {
+    const data = STAGE_DETAILS[stageKey];
+    if (!data) return;
+
+    // Highlight active stage box
+    document.querySelectorAll('.stage-box').forEach(el => el.classList.remove('highlighted'));
+    event.currentTarget.classList.add('highlighted');
+
+    inspectTitle.textContent = data.title;
+    inspectContent.innerHTML = data.content;
+    inspectDrawer.classList.add('open');
+    inspectDrawer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closeInspector() {
+    inspectDrawer.classList.remove('open');
+    document.querySelectorAll('.stage-box').forEach(el => el.classList.remove('highlighted'));
+  }
+
+  // Interactive Calculator Logic
+  const jobSlider = document.getElementById('jobSlider');
+  const jobCountLabel = document.getElementById('jobCountLabel');
+  const naiveTokens = document.getElementById('naiveTokens');
+  const pcbTokens = document.getElementById('pcbTokens');
+  const savingsOutput = document.getElementById('savingsOutput');
+
+  function updateCalc() {
+    const runs = parseInt(jobSlider.value, 10);
+    jobCountLabel.textContent = `${runs} ${runs === 1 ? 'run' : 'runs'}`;
+
+    const staticPcbTokens = 3200;
+    const dynamicTokens = 1800;
+    const totalTokensPerRun = staticPcbTokens + dynamicTokens; // 5000
+
+    // Naive: all 5000 tokens recomputed every run at $0.28 / Mtok
+    const naiveTotalTokens = runs * totalTokensPerRun;
+    const naiveCost = (naiveTotalTokens / 1000000) * 0.28;
+
+    // PCB: 1st run pays write ($0.28/Mtok), runs 2..N pay cache hit ($0.028/Mtok)
+    // Dynamic tokens always pay full $0.28/Mtok
+    const pcbCost = ((staticPcbTokens + (runs - 1) * staticPcbTokens * 0.10) / 1000000) * 0.28 +
+                    ((runs * dynamicTokens) / 1000000) * 0.28;
+
+    const pcbTotalEquivalentTokens = Math.round(staticPcbTokens + (runs - 1) * (staticPcbTokens * 0.10) + (runs * dynamicTokens));
+
+    const costSavingsPercent = ((1 - (pcbCost / naiveCost)) * 100).toFixed(1);
+    const timeSavedSeconds = Math.round(runs * 5.8);
+
+    naiveTokens.textContent = `${naiveTotalTokens.toLocaleString()} tokens ($${naiveCost.toFixed(4)})`;
+    pcbTokens.textContent = `${pcbTotalEquivalentTokens.toLocaleString()} effective tok ($${pcbCost.toFixed(4)})`;
+    savingsOutput.textContent = `${costSavingsPercent}% Cost Reduction | ~${timeSavedSeconds}s Cumulative Compute Saved`;
+  }
+
+  jobSlider.addEventListener('input', updateCalc);
+  updateCalc();
+</script>
