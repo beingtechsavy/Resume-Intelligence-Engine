@@ -10,9 +10,15 @@ OpenRouter-specific request extra: ``extra_body.provider`` routing,
 headers. Vanilla OpenAI-compatible endpoints receiving those fields can 4xx,
 so non-OpenRouter configurations get a plain request. When unset, the provider
 is auto-detected from the resolved base_url host.
+
+The cover-letter slot can run a different model than the resume slot:
+``RIE_CL_MODEL`` (fallback ``OPENROUTER_CL_MODEL``) overrides ``RIE_MODEL``
+for ``load_ai_config(..., slot="cover_letter")``. All other provider settings
+are shared, so a split CV/CL configuration differs by at most one slug.
 """
 
 from dataclasses import dataclass
+import dataclasses
 import os
 from pathlib import Path
 from typing import Any
@@ -28,6 +34,7 @@ _PROVIDER_SORTS = {"price", "throughput", "latency"}
 # Neutral key configures first; legacy key is the fallback.
 _ENV_PAIRS = {
     "model": ("RIE_MODEL", "OPENROUTER_MODEL"),
+    "cl_model": ("RIE_CL_MODEL", "OPENROUTER_CL_MODEL"),
     "api_key": ("RIE_API_KEY", "OPENROUTER_API_KEY"),
     "base_url": ("RIE_BASE_URL", "OPENROUTER_BASE_URL"),
     "provider_sort": ("RIE_PROVIDER_SORT", "OPENROUTER_PROVIDER_SORT"),
@@ -88,6 +95,24 @@ class AIConfig:
         if self.reasoning_options:
             extra_body["reasoning"] = self.reasoning_options
         return {"extra_body": extra_body} if extra_body else {}
+
+    def with_model(self, model: str) -> "AIConfig":
+        """Copy of this config pointed at another model on the same endpoint.
+
+        Model-dependent option defaults (the DeepSeek routing/reasoning
+        special case) are recomputed for the new slug; explicit env-level
+        provider/reasoning settings are intentionally not reapplied because
+        they are resolved before a config instance exists.
+        """
+        if model == self.model:
+            return self
+        is_openrouter = self.provider == PROVIDER_OPENROUTER
+        return dataclasses.replace(
+            self,
+            model=model,
+            provider_options=_provider_options(model, is_openrouter),
+            reasoning_options=_reasoning_options(model, is_openrouter),
+        )
 
 
 def _env_setting(name: str) -> str:
@@ -209,11 +234,26 @@ def _reasoning_options(model: str, is_openrouter: bool) -> dict[str, Any]:
     return {"effort": effort} if effort else {}
 
 
+def cl_model_override(env_file: Path | None = None) -> str:
+    """Return the cover-letter model override, or "" when unset.
+
+    Assumes dotenv state already resolved by ``load_ai_config``; loading the
+    env file here as well is harmless and keeps the helper self-sufficient.
+    """
+    if env_file is not None and env_file.exists():
+        load_dotenv(env_file, override=True)
+    return _env_setting("cl_model")
+
 def load_ai_config(
     env_file: Path,
     fallback_env_file: Path | None = None,
+    slot: str = "cv",
 ) -> AIConfig:
-    """Load and validate provider settings from a local .env file."""
+    """Load and validate provider settings from a local .env file.
+
+    ``slot="cover_letter"`` picks up the ``RIE_CL_MODEL`` override so the
+    cover-letter call can use a different model than the resume call.
+    """
     used_fallback = False
     if fallback_env_file and fallback_env_file.exists() and fallback_env_file != env_file:
         load_dotenv(fallback_env_file)
@@ -225,6 +265,8 @@ def load_ai_config(
 
     api_key = _env_setting("api_key")
     model = _env_setting("model")
+    if slot == "cover_letter":
+        model = _env_setting("cl_model") or model
     base_url = _env_setting("base_url") or DEFAULT_OPENROUTER_BASE_URL
 
     missing = []

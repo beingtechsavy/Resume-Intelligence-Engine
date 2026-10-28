@@ -190,10 +190,11 @@ def run_generation(
         include_cover_letter = bool(payload.get("include_cover_letter", True))
         match_report = analyze_job(job_description, profile)
 
-        from rie.llm import load_ai_config
+        from rie.llm import cl_model_override, load_ai_config
 
+        env_file = profile_path.parent / ".env"
         try:
-            config = load_ai_config(profile_path.parent / ".env")
+            config = load_ai_config(env_file)
         except SystemExit as exc:
             raise RuntimeError("provider configuration unavailable") from exc
         cv_latex, cv_usage, cv_elapsed = call_generator(run_cv, config, profile, job_description)
@@ -209,7 +210,12 @@ def run_generation(
             motivation = load_motivation_data(motivation_path)
             if not motivation:
                 raise RuntimeError("motivation data unavailable")
-            cl_latex, cl_usage, cl_elapsed = call_generator(run_cl, config, profile, motivation, job_description)
+            # The cover-letter slot can run its own model (RIE_CL_MODEL).
+            cl_model = cl_model_override(env_file)
+            cl_config = config.with_model(cl_model) if cl_model else config
+            cl_latex, cl_usage, cl_elapsed = call_generator(
+                run_cl, cl_config, profile, motivation, job_description
+            )
             if time.monotonic() - started > generation_timeout():
                 raise TimeoutError("generation deadline exceeded")
 

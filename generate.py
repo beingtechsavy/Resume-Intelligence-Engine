@@ -31,6 +31,7 @@ from rie.latex import extract_company_role, validate_latex_packages
 
 def main() -> None:
     config = load_env()
+    cl_config = load_env("cover_letter")
     data_pool = load_data_pool()
     motivation_data = load_motivation_data()
     jd = collect_job_description()
@@ -41,6 +42,8 @@ def main() -> None:
     DOCS_DIR.mkdir(exist_ok=True)
 
     print(f"\n[INFO] Provider: configured endpoint | Model: {config.model} | parallel=True")
+    if cl_config.model != config.model:
+        print(f"[INFO] Cover-letter model: {cl_config.model}")
     if config.provider_options:
         print(f"[INFO] Provider routing: {config.provider_options}")
     if config.reasoning_options:
@@ -51,6 +54,7 @@ def main() -> None:
     # generate.run_cv / generate.run_cl are honored.
     cv_result, cl_result, wall_time = run_parallel_generation(
         config, data_pool, motivation_data, jd,
+        cl_config=cl_config,
         run_cv_fn=run_cv, run_cl_fn=run_cl,
     )
 

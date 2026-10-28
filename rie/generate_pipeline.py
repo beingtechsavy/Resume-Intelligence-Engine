@@ -48,9 +48,13 @@ _MAX_RETRIES = 2
 _JD_WORD_LIMIT = 1_200
 
 
-def load_env() -> AIConfig:
-    """Load and validate the local provider configuration."""
-    return load_ai_config(ENV_FILE)
+def load_env(slot: str = "cv") -> AIConfig:
+    """Load and validate the local provider configuration for one slot.
+
+    ``slot="cover_letter"`` applies the optional ``RIE_CL_MODEL`` override;
+    both slots share the same endpoint, API key and routing settings.
+    """
+    return load_ai_config(ENV_FILE, slot=slot)
 
 
 def load_data_pool() -> dict:
@@ -222,14 +226,20 @@ def run_parallel_generation(
     motivation_data: dict,
     jd: str,
     *,
+    cl_config: AIConfig | None = None,
     run_cv_fn: Callable | None = None,
     run_cl_fn: Callable | None = None,
+    cl_model: str | None = None,
 ) -> tuple[tuple[str, dict, float], tuple[str, dict, float], float]:
     """Run the resume and cover-letter calls concurrently for one JD.
 
     The runner functions are injectable so callers (e.g. tests patching the
     root ``generate.py`` wrapper) can substitute fakes without monkey-patching
     this module's internal bindings.
+
+    ``cl_config`` (or the shorthand ``cl_model`` slug) lets the cover-letter
+    slot run on a different model than the resume slot; both still share the
+    same endpoint and API key.
     """
     cv_runner = run_cv_fn if run_cv_fn is not None else run_cv
     cl_runner = run_cl_fn if run_cl_fn is not None else run_cl
@@ -246,13 +256,15 @@ def run_parallel_generation(
                 cv_runner = _root_wrapper.run_cv
             if run_cl_fn is None:
                 cl_runner = _root_wrapper.run_cl
+    if cl_config is None:
+        cl_config = config.with_model(cl_model) if cl_model else config
     wall_start = time.time()
     cv_result = None
     cl_result = None
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         fut_cv = executor.submit(cv_runner, config, data_pool, jd)
-        fut_cl = executor.submit(cl_runner, config, data_pool, motivation_data, jd)
+        fut_cl = executor.submit(cl_runner, cl_config, data_pool, motivation_data, jd)
 
         for future in as_completed({fut_cv, fut_cl}):
             result = future.result()
